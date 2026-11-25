@@ -554,3 +554,9 @@ h1 em{font-family:'Google Sans Flex',sans-serif!important;font-style:normal;font
 .landing-page .landing-cta{margin-top:24px}
 .shell>.btn-container{margin:32px auto 0;padding:0}
 .shell>.btn-container+.app-footer{margin-top:32px;border-top:0;padding-top:0}
+
+/* Shared studio credit */
+.app-footer small{color:#777789}
+.footer-by{color:inherit;text-decoration:none}
+.footer-by:hover{text-decoration:underline;text-underline-offset:2px}
+.footer-by:focus-visible{outline:2px solid currentColor;outline-offset:3px}
