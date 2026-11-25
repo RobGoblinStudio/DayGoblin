@@ -22,7 +22,9 @@
     li + li { margin-top:2.5rem; }
     li p { max-width:36rem; margin:.6rem 0 0; font-size:clamp(1rem,1.2vw,1.15rem); line-height:1.55; }
     a { color:var(--ink); font-size:clamp(1.25rem,2.1vw,1.75rem); text-decoration:none; }
-    a:hover { text-decoration:underline; text-underline-offset:.18em; }
+    li a { text-decoration:underline; text-underline-offset:.18em; text-decoration-thickness:1px; }
+    li a::before { content:">"; display:inline-block; margin-right:.65em; text-decoration:none; }
+    a:hover { text-decoration-thickness:2px; }
     a:focus-visible { outline:2px solid var(--ink); outline-offset:5px; }
   </style>
 </head>
