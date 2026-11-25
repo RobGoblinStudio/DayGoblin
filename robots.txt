@@ -1,2 +1,6 @@
 User-agent: *
 Disallow: /
+Allow: /studio.html
+Allow: /sitemap.xml
+
+Sitemap: https://robgoblin.studio/sitemap.xml
