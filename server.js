@@ -106,6 +106,8 @@ const server=http.createServer(async(req,res)=>{
       participant.dates=[...dates].sort();await persist();sendCalendar(room);return json(res,200,{ok:true});
     }
 
+    const hostname=String(req.headers.host||'').split(':')[0].toLowerCase();
+    if(req.method==='GET'&&url.pathname==='/'&&hostname==='robgoblin.studio')return sendStatic(res,path.join(ROOT,'studio.html'));
     if(req.method==='GET'&&url.pathname==='/')return sendStatic(res,path.join(ROOT,'index.html'));
     if(req.method==='GET'&&url.pathname==='/skapa')return sendStatic(res,path.join(ROOT,'create.html'));
     if(req.method==='GET'&&url.pathname==='/create.html')return sendStatic(res,path.join(ROOT,'create.html'));
