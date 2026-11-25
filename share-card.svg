@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff7f9"/><stop offset="1" stop-color="#f5f2ff"/></linearGradient></defs>
+  <rect width="1200" height="630" rx="42" fill="url(#bg)"/>
+  <rect x="92" y="108" width="126" height="126" rx="34" fill="#e31c5f"/>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="9"><rect x="120" y="145" width="70" height="64" rx="9"/><path d="M136 132v25m38-25v25m-53 8h79m-56 18h10m18 0h10m-38 17h10m18 0h10"/></g>
+  <text x="252" y="193" fill="#202033" font-family="Arial,sans-serif" font-size="68" font-weight="700" letter-spacing="-2">DayGoblin</text>
+  <text x="92" y="365" fill="#202033" font-family="Arial,sans-serif" font-size="48" font-weight="600">Find a day that works</text>
+  <text x="92" y="430" fill="#717171" font-family="Arial,sans-serif" font-size="30">Plan together, one day at a time.</text>
+  <circle cx="1014" cy="418" r="62" fill="#e31c5f"/><circle cx="1094" cy="418" r="62" fill="#6546e8"/><circle cx="1054" cy="518" r="62" fill="#007e87"/>
+</svg>

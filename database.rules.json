@@ -1,0 +1,24 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "calendars": {
+      "$slug": {
+        ".read": "auth != null && $slug.matches(/^[a-z]+-[a-z]+-[a-z]+$/)",
+        ".write": "auth != null && !data.exists() && newData.child('ownerUid').val() === auth.uid",
+        ".validate": "newData.hasChildren(['slug', 'title', 'participantCount', 'createdAt', 'ownerUid']) && newData.child('slug').val() === $slug && newData.child('title').isString() && newData.child('title').val().length <= 100 && (newData.child('participantCount').val() === 0 || (newData.child('participantCount').isNumber() && newData.child('participantCount').val() >= 2 && newData.child('participantCount').val() <= 10 && newData.child('participantCount').val() % 1 === 0))",
+        "participants": {
+          "$uid": {
+            ".write": "auth != null && (data.exists() || auth.uid === $uid)",
+            ".validate": "newData.hasChildren(['id', 'name', 'colorIndex', 'createdAt']) && newData.child('id').val() === $uid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 32 && newData.child('colorIndex').isNumber() && newData.child('colorIndex').val() >= 0",
+            "dates": {
+              "$date": {
+                ".validate": "$date.matches(/^\\d{4}-\\d{2}-\\d{2}$/) && newData.val() === true"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
