@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f6f3ec" />
+  <meta name="description" content="RobGoblin Studio skapar små digitala verktyg och projekt för vardagen." />
+  <title>RobGoblin Studio — digitala projekt</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root { color-scheme: light; --ink:#22251f; --muted:#72766d; --paper:#f6f3ec; --card:#fffefa; --line:#deded4; --accent:#dc315e; --green:#d9ebc9; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--paper); color:var(--ink); font-family:"DM Sans",sans-serif; }
+    a { color:inherit; }
+    .wrap { width:min(1120px,calc(100% - 48px)); margin:auto; }
+    header { height:92px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); }
+    .brand { display:flex; align-items:center; gap:12px; text-decoration:none; font-family:Manrope,sans-serif; font-weight:800; letter-spacing:-.04em; font-size:20px; }
+    .brand img { width:34px; height:34px; }
+    nav a { text-decoration:none; color:var(--muted); font-size:14px; font-weight:600; }
+    nav a:hover { color:var(--ink); }
+    .hero { min-height:520px; display:grid; grid-template-columns:1.18fr .82fr; align-items:center; gap:40px; padding:68px 0 76px; }
+    .eyebrow { display:flex; align-items:center; gap:10px; color:var(--muted); font-size:12px; letter-spacing:.14em; text-transform:uppercase; font-weight:700; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--accent); }
+    h1 { margin:24px 0 20px; max-width:700px; font-family:Manrope,sans-serif; font-size:clamp(52px,7.2vw,94px); line-height:.98; letter-spacing:-.075em; font-weight:700; }
+    h1 em { color:var(--accent); font-style:normal; }
+    .lead { max-width:520px; color:var(--muted); font-size:18px; line-height:1.7; }
+    .hero-art { position:relative; width:min(100%,390px); aspect-ratio:1; justify-self:end; border-radius:48% 52% 43% 57% / 52% 42% 58% 48%; background:var(--green); display:grid; place-items:center; transform:rotate(-5deg); }
+    .hero-art:before,.hero-art:after { content:""; position:absolute; border-radius:50%; }
+    .hero-art:before { width:67%; height:67%; background:#f0a665; right:-6%; top:7%; opacity:.9; }
+    .hero-art:after { width:45%; height:45%; background:#f6f3ec; left:8%; bottom:0; }
+    .mascot { z-index:1; width:52%; height:52%; display:grid; place-items:center; border-radius:32%; background:var(--accent); color:white; font-size:clamp(72px,12vw,130px); font-family:Manrope,sans-serif; font-weight:800; letter-spacing:-.12em; box-shadow:0 22px 50px #35402b24; }
+    .projects { padding:56px 0 96px; border-top:1px solid var(--line); }
+    .section-head { display:flex; align-items:end; justify-content:space-between; gap:24px; margin-bottom:26px; }
+    h2 { margin:0; font-family:Manrope,sans-serif; font-size:clamp(32px,4vw,48px); letter-spacing:-.06em; }
+    .section-head p { margin:0; color:var(--muted); font-size:14px; }
+    .project { display:grid; grid-template-columns:1fr auto; align-items:center; gap:24px; padding:28px 30px; border:1px solid var(--line); border-radius:22px; background:var(--card); text-decoration:none; transition:transform .2s,border-color .2s,box-shadow .2s; }
+    .project:hover { transform:translateY(-3px); border-color:#c7c7ba; box-shadow:0 16px 40px #25251a0c; }
+    .project-label { color:var(--accent); font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+    .project h3 { margin:8px 0 6px; font-family:Manrope,sans-serif; font-size:27px; letter-spacing:-.05em; }
+    .project p { margin:0; color:var(--muted); line-height:1.6; }
+    .arrow { width:48px; height:48px; display:grid; place-items:center; border-radius:50%; background:var(--ink); color:white; font-size:22px; }
+    footer { display:flex; justify-content:space-between; gap:20px; padding:22px 0 32px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+    @media(max-width:720px) { .wrap{width:min(100% - 36px,560px)} header{height:74px}.hero{min-height:0;grid-template-columns:1fr;gap:38px;padding:72px 0 66px}.hero-art{width:min(72vw,290px);justify-self:center;grid-row:1}.hero-copy{grid-row:2}h1{font-size:clamp(54px,14vw,82px)}.lead{font-size:16px}.section-head{align-items:start;flex-direction:column;gap:10px}.project{padding:22px;grid-template-columns:1fr auto}.project h3{font-size:24px}footer{flex-direction:column;gap:8px} }
+    @media(prefers-reduced-motion:reduce) { html{scroll-behavior:auto} *,*:before,*:after{transition:none!important} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <a class="brand" href="/" aria-label="RobGoblin Studio"><img src="/favicon.svg" alt="" />RobGoblin Studio</a>
+      <nav><a href="#projekt">Projekt</a></nav>
+    </header>
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow"><span class="dot"></span> En liten digital studio</div>
+          <h1>Små idéer.<br /><em>Byggda för vardagen.</em></h1>
+          <p class="lead">RobGoblin Studio samlar digitala projekt och verktyg som gör det lite enklare att få saker gjorda tillsammans.</p>
+        </div>
+        <div class="hero-art" aria-hidden="true"><div class="mascot">R</div></div>
+      </section>
+      <section class="projects" id="projekt">
+        <div class="section-head"><h2>Projekt</h2><p>Det här bygger jag just nu.</p></div>
+        <a class="project" href="https://daygoblin.robgoblin.studio">
+          <div><div class="project-label">Planering · Tillgänglig nu</div><h3>DayGoblin</h3><p>Hitta en dag som passar alla. Skapa en kalender och låt gruppen markera när de kan.</p></div>
+          <span class="arrow" aria-hidden="true">↗</span>
+        </a>
+      </section>
+    </main>
+    <footer><span>© <span id="year"></span> RobGoblin Studio</span><span>Små verktyg för stora planer.</span></footer>
+  </div>
+  <script>document.getElementById("year").textContent=new Date().getFullYear(); history.replaceState(null,"","/");</script>
+</body>
+</html>
