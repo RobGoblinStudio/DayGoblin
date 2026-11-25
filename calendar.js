@@ -1,5 +1,5 @@
-import { api, participantId, ready, startupError } from './data.js';
-import { currentLanguage, locale, t } from './i18n.js';
+import { api, participantId, ready, startupError } from './data.js?v=25';
+import { currentLanguage, locale, t } from './i18n.js?v=6';
 
 const roomSlug=decodeURIComponent(location.pathname.split('/').filter(Boolean)[0]||'');
 const nameKey=`daybuddy:${roomSlug}:name`;
@@ -15,6 +15,10 @@ let nameTimer=null;
 let source=null;
 const pendingVotes=new Set();
 const pendingVoteStates=new Map();
+const pendingPreferences=new Set();
+const pendingPreferenceStates=new Map();
+const enteringPreferenceDots=new Set();
+const leavingPreferenceDots=new Set();
 let renderedAvatarKeys=new Set();
 let renderedAvatarPeople=new Map();
 let renderedAvatarStackOrders=new Map();
@@ -54,10 +58,10 @@ function currentParticipant(){return participants().find(person=>person.id===act
 function applyParticipantVote(target,key,state){
   if(!target)return;
   let person=target.participants.find(item=>item.id===activeParticipantId);
-  if(!person){person={id:activeParticipantId,name:state.name,dates:[],colorIndex:target.participants.length,createdAt:new Date().toISOString()};target.participants.push(person)}
+  if(!person){person={id:activeParticipantId,name:state.name,dates:[],preferredDates:[],colorIndex:target.participants.length,createdAt:new Date().toISOString()};target.participants.push(person)}
   person.name=state.name;
   person.dates=person.dates.filter(date=>date!==key);
-  if(state.available)person.dates.push(key);
+  if(state.available)person.dates.push(key);else person.preferredDates=(person.preferredDates||[]).filter(date=>date!==key);
 }
 function serverHasVote(target,key,state){
   const person=target?.participants.find(item=>item.id===activeParticipantId);
@@ -68,6 +72,17 @@ function applyPendingVotes(target){
     if(state.saved&&serverHasVote(target,key,state)){pendingVoteStates.delete(key);continue}
     applyParticipantVote(target,key,state);
   }
+  return target;
+}
+function applyParticipantPreference(target,key,state){
+  const person=target?.participants.find(item=>item.id===state.participantId);if(!person)return;
+  const preferredDates=new Set(person.preferredDates||[]);if(state.preferred)preferredDates.add(key);else preferredDates.delete(key);person.preferredDates=[...preferredDates].sort();
+}
+function serverHasPreference(target,key,state){
+  const person=target?.participants.find(item=>item.id===state.participantId);return Boolean(person)&&((person.preferredDates||[]).includes(key)===state.preferred);
+}
+function applyPendingPreferences(target){
+  for(const [key,state] of pendingPreferenceStates){if(state.saved&&serverHasPreference(target,key,state)){pendingPreferenceStates.delete(key);continue}applyParticipantPreference(target,key,state)}
   return target;
 }
 const nameCookieKey=`daybuddy_name_${roomSlug}`;
@@ -225,10 +240,19 @@ function render(){
     commonContainer.innerHTML=[...months].map(([monthName,monthDays])=>`
       <section class="common-month">
         <h3 class="common-month-title">${escapeHtml(monthName)}</h3>
-        ${monthDays.map(({date,people})=>{
+        ${monthDays.map(({key,date,people})=>{
           const weekday=new Intl.DateTimeFormat(locale(),{weekday:'short'}).format(date).replace('.','');
-          const avatars=people.map(person=>`<i class="common-avatar" title="${escapeHtml(person.name)}" aria-label="${escapeHtml(person.name)}" style="--person-color:${personColor(person)}">${escapeHtml(person.name.trim().charAt(0).toUpperCase())}</i>`).join('');
-          return `<article class="common-day"><div class="common-date"><span>${escapeHtml(weekday)}</span><strong>${date.getDate()}</strong></div><span class="common-avatars" aria-hidden="true">${avatars}</span></article>`;
+          const preferredPeople=people.filter(person=>(person.preferredDates||[]).includes(key));
+          const avatars=people.map(person=>{
+            const preferred=(person.preferredDates||[]).includes(key);
+            const label=preferred?`${person.name} — ${t('preferredDay')}`:person.name;
+            const markerKey=`${key}:${person.id}`;
+            const markerClass=preferred?(enteringPreferenceDots.has(markerKey)?' preferred preference-entering':' preferred'):(leavingPreferenceDots.has(markerKey)?' preference-removing':'');
+            return `<span class="common-avatar-wrap${markerClass}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"><i class="common-avatar" style="--person-color:${personColor(person)}">${escapeHtml(person.name.trim().charAt(0).toUpperCase())}</i></span>`;
+          }).join('');
+          const mine=preferredPeople.some(person=>person.id===activeParticipantId);
+          const pending=pendingPreferences.has(key);
+          return `<article class="common-day"><div class="common-date"><span>${escapeHtml(weekday)}</span><strong>${date.getDate()}</strong></div><span class="common-avatars" aria-hidden="true">${avatars}</span><button class="preference-button${mine?' active':''}" type="button" data-prefer-date="${key}" aria-pressed="${mine}"${pending?' disabled':''}><span class="material-symbols-rounded" aria-hidden="true">${mine?'check':''}</span><span>${escapeHtml(t(mine?'preferredDay':'preferDay'))}</span></button></article>`;
         }).join('')}
       </section>`).join('');
   }
@@ -314,15 +338,40 @@ async function toggleDate(key){
   }
   finally{pendingVotes.delete(key);render()}
 }
+async function togglePreferredDay(key){
+  if(pendingPreferences.has(key))return;
+  const person=currentParticipant();if(!person){toast(t('chooseParticipant'));return}
+  const name=profileInput.value.trim();if(!name){focusNameInput();toast(t('nameFirst'));return}
+  clearTimeout(nameTimer);
+  const state={participantId:activeParticipantId,name,preferred:!(person.preferredDates||[]).includes(key),saved:false};
+  const markerKey=`${key}:${activeParticipantId}`;
+  enteringPreferenceDots.delete(markerKey);leavingPreferenceDots.delete(markerKey);
+  const markerSet=state.preferred?enteringPreferenceDots:leavingPreferenceDots;markerSet.add(markerKey);
+  setTimeout(()=>{markerSet.delete(markerKey);render()},state.preferred?320:180);
+  pendingPreferences.add(key);pendingPreferenceStates.set(key,state);applyParticipantPreference(room,key,state);render();
+  try{
+    await api.savePreference(roomSlug,activeParticipantId,name,key,state.preferred);
+    applyParticipantPreference(room,key,state);state.saved=true;
+    if(serverHasPreference(latestServerRoom,key,state))pendingPreferenceStates.delete(key);
+  }catch(error){
+    if(error.offlineQueued){applyParticipantPreference(room,key,state);state.saved=true;toast(t('offlineSaved'));return}
+    try{
+      const fresh=await api.getCalendar(roomSlug);latestServerRoom=fresh;
+      if(serverHasPreference(fresh,key,state)){room=fresh;applyParticipantPreference(room,key,state);state.saved=true;pendingPreferenceStates.delete(key)}
+      else{pendingPreferenceStates.delete(key);toast(t(error instanceof TypeError||/fetch|network/i.test(error.message)?'saveError':'saveErrorShort'))}
+    }catch{pendingPreferenceStates.delete(key);toast(t('saveError'))}
+  }finally{pendingPreferences.delete(key);render()}
+}
+
 async function refreshRoom(){room=await api.getCalendar(roomSlug);render()}
 function roomSignature(value){
   if(!value)return '';
-  return JSON.stringify([value.title,value.participantCount,(value.participants||[]).map(person=>[person.id,person.name,person.colorIndex,person.createdAt,[...person.dates].sort()])]);
+  return JSON.stringify([value.title,value.participantCount,(value.participants||[]).map(person=>[person.id,person.name,person.colorIndex,person.createdAt,[...person.dates].sort(),[...(person.preferredDates||[])].sort()])]);
 }
 function connectLive(){
   source=api.subscribe(roomSlug,updated=>{
     latestServerRoom=updated;
-    const nextRoom=applyPendingVotes(updated);
+    const nextRoom=applyPendingPreferences(applyPendingVotes(updated));
     const changed=roomSignature(room)!==roomSignature(nextRoom);
     room=nextRoom;
     if(changed)render();
@@ -360,6 +409,7 @@ document.getElementById('participantOptions').addEventListener('click',event=>{
 });
 document.getElementById('calendarTab').addEventListener('click',()=>setActiveView('calendar'));
 document.getElementById('commonTab').addEventListener('click',()=>setActiveView('common'));
+  document.getElementById('commonDays').addEventListener('click',event=>{const button=event.target.closest('[data-prefer-date]');if(button)togglePreferredDay(button.dataset.preferDate)});
 document.getElementById('shareButton').addEventListener('click',async()=>{
   const shareData={title:`${room?.title||'DayGoblin'} — DayGoblin`,url:location.href};
   try{if(navigator.share)await navigator.share(shareData);else{await navigator.clipboard.writeText(location.href);toast(t('copied'))}}

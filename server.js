@@ -29,7 +29,7 @@ function persist(){
   return operation;
 }
 function publicCalendar(calendar){
-  const participants=Object.values(calendar.participants).map((p,index)=>({id:p.id,name:p.name,colorIndex:Number.isInteger(p.colorIndex)?p.colorIndex:index,dates:[...p.dates].sort(),createdAt:p.createdAt})).sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
+  const participants=Object.values(calendar.participants).map((p,index)=>({id:p.id,name:p.name,colorIndex:Number.isInteger(p.colorIndex)?p.colorIndex:index,dates:[...p.dates].sort(),preferredDates:[...(p.preferredDates||[])].sort(),createdAt:p.createdAt})).sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
   return {slug:calendar.slug,title:calendar.title,participantCount:calendar.participantCount,createdAt:calendar.createdAt,participants};
 }
 function sendCalendar(slug){
@@ -88,7 +88,7 @@ const server=http.createServer(async(req,res)=>{
       const [,room,participantId]=participantMatch;const calendar=database.calendars[room];if(!calendar)return json(res,404,{error:'Kalendern hittades inte.'});
       const body=await readBody(req);const name=String(body.name||'').trim();if(!name||name.length>32)return json(res,400,{error:'Skriv ett namn på högst 32 tecken.'});
       if(!calendar.participants[participantId]&&calendar.participantCount!=null&&Object.keys(calendar.participants).length>=calendar.participantCount)return json(res,409,{error:'Kalendern är full. Välj ett befintligt namn.'});
-      const participant=calendar.participants[participantId]||{id:participantId,name,dates:[],colorIndex:Object.keys(calendar.participants).length,createdAt:new Date().toISOString()};
+      const participant=calendar.participants[participantId]||{id:participantId,name,dates:[],preferredDates:[],colorIndex:Object.keys(calendar.participants).length,createdAt:new Date().toISOString()};
       participant.name=name;calendar.participants[participantId]=participant;
       await persist();sendCalendar(room);return json(res,200,{ok:true});
     }
@@ -99,11 +99,23 @@ const server=http.createServer(async(req,res)=>{
       if(!validDate(date))return json(res,400,{error:'Ogiltigt datum.'});
       const body=await readBody(req);const name=String(body.name||'').trim();if(!name||name.length>32)return json(res,400,{error:'Skriv ett namn på högst 32 tecken.'});
       if(!calendar.participants[participantId]&&calendar.participantCount!=null&&Object.keys(calendar.participants).length>=calendar.participantCount)return json(res,409,{error:'Kalendern är full. Välj ett befintligt namn.'});
-      const participant=calendar.participants[participantId]||{id:participantId,name,dates:[],colorIndex:Object.keys(calendar.participants).length,createdAt:new Date().toISOString()};
+      const participant=calendar.participants[participantId]||{id:participantId,name,dates:[],preferredDates:[],colorIndex:Object.keys(calendar.participants).length,createdAt:new Date().toISOString()};
       participant.name=name;calendar.participants[participantId]=participant;
       const dates=new Set(participant.dates);
-      if(body.available===true)dates.add(date);else if(body.available===false)dates.delete(date);else return json(res,400,{error:'Ange om du kan eller inte kan den dagen.'});
+      if(body.available===true)dates.add(date);else if(body.available===false){dates.delete(date);const preferredDates=new Set(participant.preferredDates||[]);preferredDates.delete(date);participant.preferredDates=[...preferredDates].sort()}else return json(res,400,{error:'Ange om du kan eller inte kan den dagen.'});
       participant.dates=[...dates].sort();await persist();sendCalendar(room);return json(res,200,{ok:true});
+    }
+
+    const preferenceMatch=url.pathname.match(/^\/api\/calendar\/([a-z]+-[a-z]+-[a-z]+)\/participants\/([a-zA-Z0-9_-]{8,80})\/preferences\/(\d{4}-\d{2}-\d{2})$/);
+    if(req.method==='PUT'&&preferenceMatch){
+      const [,room,participantId,date]=preferenceMatch;const calendar=database.calendars[room];if(!calendar)return json(res,404,{error:'Kalendern hittades inte.'});
+      if(!validDate(date))return json(res,400,{error:'Ogiltigt datum.'});
+      const body=await readBody(req);const name=String(body.name||'').trim();if(!name||name.length>32)return json(res,400,{error:'Skriv ett namn på högst 32 tecken.'});
+      if(typeof body.preferred!=='boolean')return json(res,400,{error:'Ange om du föredrar dagen.'});
+      if(!calendar.participants[participantId]&&calendar.participantCount!=null&&Object.keys(calendar.participants).length>=calendar.participantCount)return json(res,409,{error:'Kalendern är full. Välj ett befintligt namn.'});
+      const participant=calendar.participants[participantId]||{id:participantId,name,dates:[],preferredDates:[],colorIndex:Object.keys(calendar.participants).length,createdAt:new Date().toISOString()};
+      participant.name=name;const preferredDates=new Set(participant.preferredDates||[]);if(body.preferred)preferredDates.add(date);else preferredDates.delete(date);participant.preferredDates=[...preferredDates].sort();calendar.participants[participantId]=participant;
+      await persist();sendCalendar(room);return json(res,200,{ok:true});
     }
 
     const hostname=String(req.headers.host||'').split(':')[0].toLowerCase();

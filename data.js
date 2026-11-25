@@ -19,6 +19,7 @@ const localApi={
   async getCalendar(slug){return localJson(`/api/calendar/${encodeURIComponent(slug)}`)},
   async saveParticipant(slug,id,name){return localJson(`/api/calendar/${encodeURIComponent(slug)}/participants/${encodeURIComponent(id)}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})})},
   async saveVote(slug,id,name,date,available){return localJson(`/api/calendar/${encodeURIComponent(slug)}/participants/${encodeURIComponent(id)}/days/${date}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,available})})},
+  async savePreference(slug,id,name,date,preferred){return localJson(`/api/calendar/${encodeURIComponent(slug)}/participants/${encodeURIComponent(id)}/preferences/${date}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,preferred})})},
   subscribe(slug,onUpdate,onError){const source=new EventSource(`/api/calendar/${encodeURIComponent(slug)}/events`);source.addEventListener('update',event=>onUpdate(JSON.parse(event.data)));source.onerror=onError;return ()=>source.close()}
 };
 
@@ -27,7 +28,8 @@ export let ready=Promise.resolve();
 export let participantId=localParticipantId();
 export let api=localApi;
 export let startupError=null;
-if(configured){
+const useFirebase=configured&&!['localhost','127.0.0.1'].includes(location.hostname);
+if(useFirebase){
   try{
     backend=await import('./firebase-backend.js');
     ready=backend.initialize(firebaseConfig);
@@ -36,4 +38,4 @@ if(configured){
     api=backend.api;
   }catch(error){startupError=error}
 }
-export const storageMode=configured?'firebase':'local';
+export const storageMode=useFirebase?'firebase':'local';
