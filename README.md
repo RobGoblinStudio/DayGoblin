@@ -32,3 +32,7 @@ Connect the repository to Netlify and keep the build settings in `netlify.toml`:
 Firebase provides real-time shared updates. The browser also caches the last room snapshot and queues that browser's own name and day changes in local storage if the connection drops. A toast explains when a change is waiting to sync. Queued changes sync when the browser reconnects. The cache is local to that browser and is not a substitute for Firebase sharing.
 
 Three-word addresses are meant to be easy to share, not used as passwords. Anyone with a room link can read it and submit their own response. Anonymous authentication prevents one browser session from overwriting another participant's record.
+
+## Vercel
+
+The Vercel deployment uses `vercel.json`: `node scripts/build.mjs` builds the static site into `dist`, and the rewrite rules keep `/skapa` and shared calendar URLs working. The browser app currently uses Firebase Realtime Database for shared calendars. `netlify.toml` remains for the existing Netlify setup.
