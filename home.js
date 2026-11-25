@@ -92,7 +92,11 @@ countInput.addEventListener('change',()=>{
   updateCountSteppers();
 });
 countStepButtons.forEach(button=>button.addEventListener('pointerdown',event=>event.preventDefault()));
+let countStepTimer;
 countStepButtons.forEach(button=>button.addEventListener('click',()=>{
+  clearTimeout(countStepTimer);
+  countStepButtons.forEach(other=>other.classList.toggle('is-recent',other===button));
+  countStepTimer=setTimeout(()=>button.classList.remove('is-recent'),500);
   const current=Number(countInput.value);
   const step=Number(button.dataset.countStep);
   countInput.value=String(Math.max(2,Math.min(10,(Number.isFinite(current)?current:2)+step)));

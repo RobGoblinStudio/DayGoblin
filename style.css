@@ -243,9 +243,9 @@ footer{border-top-color:#dfe5d8;color:#677265;font-size:11px}
 .open-option>input{position:absolute;width:1px;height:1px;opacity:0}
 .switch{width:46px;height:27px;flex:0 0 46px;padding:3px;border-radius:20px;background:#d8ded2;transition:background .16s;position:relative}
 .switch:after{content:"";display:block;width:21px;height:21px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #20281f30;transition:transform .16s}
-.open-option input:checked+.switch{background:#578b4c}
-.open-option input:checked+.switch:after{transform:translateX(19px)}
-.open-option input:focus-visible+.switch{outline:3px solid #9fbd8b;outline-offset:3px}
+.open-option input:checked~.switch{background:#578b4c}
+.open-option input:checked~.switch:after{transform:translateX(19px)}
+.open-option input:focus-visible~.switch{outline:3px solid #9fbd8b;outline-offset:3px}
 .open-copy{display:flex;flex-direction:column;gap:3px;color:#334633}
 .open-copy b{font:700 14px Manrope,sans-serif}
 .open-copy small{font-size:12px;color:#687466}
@@ -284,7 +284,7 @@ h1,h2,.month-title,.responders-heading strong,.create-label,.open-copy b,.brand,
 .calendar-page .calendar.open-voting .day.heat-5{background:#e31c5f;border-color:#e31c5f;color:#fff}
 .calendar-page .calendar.open-voting .day.heat-5 .number,.calendar-page .heat-5 .vote-count{color:#fff}
 .calendar-page .today.heat-5{border-color:#202033!important}
-.open-option input:checked+.switch{background:#e31c5f}
+.open-option input:checked~.switch{background:#e31c5f}
 .purpose-input:focus,.count-input:focus{border-color:#ff385c;box-shadow:0 0 0 3px #ff385c20}
 .responders{border-color:var(--line)}
 .common-date{background:#fff0f3;color:#c2185b}
@@ -542,7 +542,10 @@ h1 em{font-family:'Google Sans Flex',sans-serif!important;font-style:normal;font
 .count-input-wrap .count-input{padding-right:58px}
 .count-stepper{position:absolute;top:6px;right:7px;bottom:6px;width:34px;display:flex;flex-direction:column;gap:2px}
 .count-stepper button{flex:1;min-height:0;display:grid;place-items:center;padding:0;border:0;border-radius:5px;background:transparent;color:#687466;cursor:pointer}
-.count-stepper button:hover:not(:disabled){background:#eeecff;color:#6048dc}
+.count-input-wrap::after{content:"";position:absolute;z-index:1;top:1px;bottom:1px;right:49px;width:16px;cursor:default}
+.count-stepper{z-index:2;width:42px}
+.count-stepper button{transition:background-color .2s ease,color .2s ease}
+.count-stepper button.is-recent{background:#eeecff;color:#6048dc}
 .count-stepper button:focus-visible{outline:2px solid #6546e8;outline-offset:1px}
 .count-stepper button:disabled{opacity:.35;cursor:not-allowed}
 .count-stepper .material-symbols-rounded{font-size:20px;line-height:1}
@@ -565,3 +568,5 @@ h1 em{font-family:'Google Sans Flex',sans-serif!important;font-style:normal;font
 html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 a,button,label,input,select,textarea,[role="button"]{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 @media (max-width:767px){input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),textarea,select{font-size:16px!important}}
+
+@media (prefers-reduced-motion:reduce){.count-stepper button,.switch,.switch:after{transition:none}}
