@@ -2,15 +2,27 @@
   "buildCommand": "node scripts/build.mjs",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/skapa", "destination": "/create.html" },
-    { "source": "/:room", "destination": "/calendar.html" }
+    {
+      "source": "/skapa",
+      "destination": "/create.html"
+    },
+    {
+      "source": "/:room([a-z0-9]+-[a-z0-9]+-[a-z0-9]+)",
+      "destination": "/calendar.html"
+    }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
       ]
     }
   ]
