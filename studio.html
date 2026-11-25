@@ -13,6 +13,10 @@
     html { min-height:100%; }
     body { min-height:100vh; min-height:100svh; margin:0; background:var(--paper); color:var(--ink); font-family:"Courier New",Courier,monospace; }
     main { width:min(100%,1440px); min-height:100vh; min-height:100svh; margin:0 auto; padding:clamp(28px,7vw,100px); display:flex; flex-direction:column; justify-content:center; }
+    .language-switch { align-self:flex-end; display:flex; gap:.25rem; margin-bottom:clamp(2rem,5vh,4rem); }
+    .language-switch button { border:1px solid var(--ink); background:transparent; color:var(--ink); font:700 1rem/1 "Courier New",Courier,monospace; padding:.65rem .75rem; cursor:pointer; }
+    .language-switch button[aria-pressed="true"] { background:var(--ink); color:var(--paper); }
+    .language-switch button:focus-visible { outline:2px solid var(--ink); outline-offset:3px; }
     h1 { margin:0; font-size:clamp(3rem,15vw,12rem); font-weight:700; line-height:.95; letter-spacing:-.085em; }
     ul { margin:clamp(64px,10vh,120px) 0 0; padding:0; list-style:none; }
     li + li { margin-top:2.5rem; }
@@ -24,17 +28,46 @@
 </head>
 <body>
   <main>
+    <div class="language-switch" role="group" aria-label="Språk / Language">
+      <button type="button" data-language="sv" aria-pressed="true" lang="sv">SV</button>
+      <button type="button" data-language="en" aria-pressed="false" lang="en">EN</button>
+    </div>
     <h1>HEJ KINA!</h1>
     <ul aria-label="Projekt">
       <li>
         <a href="https://daygoblin.robgoblin.studio">DayGoblin</a>
-        <p>Hitta en dag som passar alla. Skapa en kalender, dela länken och se när ni kan ses.</p>
+        <p id="day-description">Hitta en dag som passar alla. Skapa en kalender, dela länken och se när ni kan ses.</p>
       </li>
       <li>
         <a href="https://buygoblin.robgoblin.studio">BuyGoblin</a>
-        <p>Samla produkter från olika webbshoppar på en lista, så hittar du enkelt tillbaka till dem innan du beställer.</p>
+        <p id="buy-description">Samla produkter från olika webbshoppar på en lista, så hittar du enkelt tillbaka till dem innan du beställer.</p>
       </li>
     </ul>
   </main>
+  <script>
+    (() => {
+      const translations = {
+        sv: { greeting: 'HEJ KINA!', day: 'Hitta en dag som passar alla. Skapa en kalender, dela länken och se när ni kan ses.', buy: 'Samla produkter från olika webbshoppar på en lista, så hittar du enkelt tillbaka till dem innan du beställer.', projects: 'Projekt', description: 'RobGoblin Studio — enkla verktyg för att planera tillsammans och samla produkter från webbshoppar.' },
+        en: { greeting: 'HI KINA!', day: 'Find a day that works for everyone. Create a calendar, share the link and see when you can meet.', buy: 'Keep products from different online shops in one list, so you can easily find them again when you’re ready to order.', projects: 'Projects', description: 'RobGoblin Studio — simple tools for making plans together and collecting products from online shops.' }
+      };
+      const buttons = document.querySelectorAll('[data-language]');
+      const setLanguage = language => {
+        const copy = translations[language];
+        document.documentElement.lang = language;
+        document.querySelector('h1').textContent = copy.greeting;
+        document.getElementById('day-description').textContent = copy.day;
+        document.getElementById('buy-description').textContent = copy.buy;
+        document.querySelector('ul').setAttribute('aria-label', copy.projects);
+        document.querySelector('meta[name="description"]').content = copy.description;
+        buttons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.language === language)));
+        document.querySelectorAll('li a').forEach(link => { const url = new URL(link.href); url.searchParams.set('lang', language); link.href = url.href; });
+        try { localStorage.setItem('robgoblin-language', language); } catch {}
+      };
+      buttons.forEach(button => button.addEventListener('click', () => setLanguage(button.dataset.language)));
+      let saved;
+      try { saved = localStorage.getItem('robgoblin-language'); } catch {}
+      setLanguage(saved === 'en' ? 'en' : 'sv');
+    })();
+  </script>
 </body>
 </html>
