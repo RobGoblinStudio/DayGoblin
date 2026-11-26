@@ -14,13 +14,16 @@ async function localJson(url,options={}){
   if(!result||result.error)throw new Error(result?.error||'Något gick fel.');
   return result;
 }
+const localConnectionListeners=new Set();
+function notifyLocalConnection(value){for(const listener of localConnectionListeners)listener(value)}
 const localApi={
   async createCalendar(purpose,participantCount){return localJson('/api/calendars',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({purpose,participantCount})})},
   async getCalendar(slug){return localJson(`/api/calendar/${encodeURIComponent(slug)}`)},
   async saveParticipant(slug,id,name){return localJson(`/api/calendar/${encodeURIComponent(slug)}/participants/${encodeURIComponent(id)}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})})},
   async saveVote(slug,id,name,date,available){return localJson(`/api/calendar/${encodeURIComponent(slug)}/participants/${encodeURIComponent(id)}/days/${date}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,available})})},
   async savePreference(slug,id,name,date,preferred){return localJson(`/api/calendar/${encodeURIComponent(slug)}/participants/${encodeURIComponent(id)}/preferences/${date}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,preferred})})},
-  subscribe(slug,onUpdate,onError){const source=new EventSource(`/api/calendar/${encodeURIComponent(slug)}/events`);source.addEventListener('update',event=>onUpdate(JSON.parse(event.data)));source.onerror=onError;return ()=>source.close()}
+  subscribe(slug,onUpdate,onError){const source=new EventSource(`/api/calendar/${encodeURIComponent(slug)}/events`);source.addEventListener('update',event=>{onUpdate(JSON.parse(event.data));notifyLocalConnection(true)});source.onopen=()=>notifyLocalConnection(true);source.onerror=()=>{notifyLocalConnection(false);onError?.()};return ()=>source.close()},
+  onConnectionChange(listener){localConnectionListeners.add(listener);return ()=>localConnectionListeners.delete(listener)}
 };
 
 let backend=null;
@@ -31,7 +34,7 @@ export let startupError=null;
 const useFirebase=configured&&!['localhost','127.0.0.1'].includes(location.hostname);
 if(useFirebase){
   try{
-    backend=await import('./firebase-backend.js');
+    backend=await import('./firebase-backend.js?v=26');
     ready=backend.initialize(firebaseConfig);
     await ready;
     participantId=backend.participantId;

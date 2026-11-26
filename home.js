@@ -1,9 +1,8 @@
 import { api, startupError } from './data.js';
-import { currentLanguage, t } from './i18n.js?v=6';
+import { currentLanguage, t } from './i18n.js?v=7';
 
 const form=document.getElementById('createForm');
 const countInput=document.getElementById('participantCountInput');
-const countStepButtons=[...document.querySelectorAll('[data-count-step]')];
 const openInput=document.getElementById('openAudience');
 const purposeInput=document.getElementById('purposeInput');
 const purposeExample=document.getElementById('purposeExample');
@@ -78,36 +77,10 @@ purposeInput.addEventListener('input',()=>{
   purposeInput.removeAttribute('aria-invalid');
 });
 
-function updateCountSteppers(){
-  const value=Number(countInput.value);
-  countStepButtons.forEach(button=>{
-    const step=Number(button.dataset.countStep);
-    button.disabled=openInput.checked||!Number.isFinite(value)||(step<0?value<=2:value>=10);
-  });
-}
-countInput.addEventListener('input',()=>{countInput.removeAttribute('aria-invalid');updateCountSteppers()});
-countInput.addEventListener('change',()=>{
-  const value=Number(countInput.value);
-  countInput.value=String(!Number.isFinite(value)||countInput.value===''?2:Math.max(2,Math.min(10,value)));
-  updateCountSteppers();
-});
-countStepButtons.forEach(button=>button.addEventListener('pointerdown',event=>event.preventDefault()));
-let countStepTimer;
-countStepButtons.forEach(button=>button.addEventListener('click',()=>{
-  clearTimeout(countStepTimer);
-  countStepButtons.forEach(other=>other.classList.toggle('is-recent',other===button));
-  countStepTimer=setTimeout(()=>button.classList.remove('is-recent'),500);
-  const current=Number(countInput.value);
-  const step=Number(button.dataset.countStep);
-  countInput.value=String(Math.max(2,Math.min(10,(Number.isFinite(current)?current:2)+step)));
-  countInput.dispatchEvent(new Event('input',{bubbles:true}));
-}));
-updateCountSteppers();
-
+const openExplainer=document.getElementById('openExplainer');
 openInput.addEventListener('change',()=>{
   countInput.disabled=openInput.checked;
-  countInput.setAttribute('aria-disabled',String(openInput.checked));
-  updateCountSteppers();
+  openExplainer.hidden=!openInput.checked;
 });
 
 form.addEventListener('submit',async event=>{
@@ -115,9 +88,6 @@ form.addEventListener('submit',async event=>{
   const purpose=purposeInput.value.trim();
   const participantCount=openInput.checked?null:Number(countInput.value);
   if(!purpose){purposeInput.setAttribute('aria-invalid','true');focusField(purposeInput);showToast(t('requiredTitle'));return}
-  if(participantCount!==null&&(!Number.isInteger(participantCount)||participantCount<2||participantCount>10)){
-    countInput.setAttribute('aria-invalid','true');focusField(countInput);showToast(t('invalidCount'));return;
-  }
   if(startupError){showError('databaseUnavailable');return}
   submitButton.disabled=true;submitButton.querySelector('[data-i18n]').textContent=t('creating');
   try{

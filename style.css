@@ -501,12 +501,6 @@ h1 em{font-family:'Google Sans Flex',sans-serif!important;font-style:normal;font
 .calendar-page .common-avatar-wrap{position:relative;z-index:0;display:block;width:25px;height:25px;flex:0 0 25px;margin-left:-6px}
 
 .calendar-page .common-avatar{position:relative;width:100%;height:100%;flex:0 0 100%;margin:0;border-color:#fff;box-shadow:0 1px 3px #24301d24}
-.calendar-page .common-avatar-wrap.preferred::after,.calendar-page .common-avatar-wrap.preference-removing::after{content:'';position:absolute;top:-11px;left:50%;width:7px;height:7px;transform:translateX(-50%);border:1.5px solid #fff;border-radius:50%;background:#6546e8;z-index:-1;pointer-events:none}
-.calendar-page .common-avatar-wrap.preference-entering::after{animation:preferred-dot-in 320ms cubic-bezier(.2,.75,.28,1.14) both}
-.calendar-page .common-avatar-wrap.preference-removing::after{animation:preferred-dot-out 160ms cubic-bezier(.3,0,.5,1) both}
-@keyframes preferred-dot-in{0%{transform:translate(-50%,10px)}65%{transform:translate(-50%,-1px)}100%{transform:translate(-50%,0)}}
-@keyframes preferred-dot-out{0%{transform:translate(-50%,0)}100%{transform:translate(-50%,10px)}}
-@media(prefers-reduced-motion:reduce){.calendar-page .common-avatar-wrap.preference-entering::after,.calendar-page .common-avatar-wrap.preference-removing::after{animation-duration:1ms}}
 
 .calendar-page .common-day{display:grid;grid-template-columns:48px minmax(0,1fr) auto auto;gap:10px;align-items:center}
 .calendar-page .common-avatars{margin-left:0;padding-left:0;justify-content:flex-end}
@@ -538,17 +532,6 @@ h1 em{font-family:'Google Sans Flex',sans-serif!important;font-style:normal;font
 /* Landing steps lead into the main action; custom count arrows stay clear of typed input. */
 .landing-page .landing-cta{margin-top:22px}
 .shell>.btn-container+.app-footer{margin-top:14px}
-.count-input-wrap{position:relative}
-.count-input-wrap .count-input{padding-right:58px}
-.count-stepper{position:absolute;top:6px;right:7px;bottom:6px;width:34px;display:flex;flex-direction:column;gap:2px}
-.count-stepper button{flex:1;min-height:0;display:grid;place-items:center;padding:0;border:0;border-radius:5px;background:transparent;color:#687466;cursor:pointer}
-.count-input-wrap::after{content:"";position:absolute;z-index:1;top:1px;bottom:1px;right:49px;width:16px;cursor:default}
-.count-stepper{z-index:2;width:42px}
-.count-stepper button{transition:background-color .2s ease,color .2s ease}
-.count-stepper button.is-recent{background:#eeecff;color:#6048dc}
-.count-stepper button:focus-visible{outline:2px solid #6546e8;outline-offset:1px}
-.count-stepper button:disabled{opacity:.35;cursor:not-allowed}
-.count-stepper .material-symbols-rounded{font-size:20px;line-height:1}
 
 /* Keep the landing page rhythm even and align the Ko-fi/version spacing. */
 .landing-page .home-intro{padding-bottom:0}
@@ -569,4 +552,50 @@ html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;touch
 a,button,label,input,select,textarea,[role="button"]{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 @media (max-width:767px){input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),textarea,select{font-size:16px!important}}
 
-@media (prefers-reduced-motion:reduce){.count-stepper button,.switch,.switch:after{transition:none}}
+@media (prefers-reduced-motion:reduce){.switch,.switch:after{transition:none}}
+
+/* Native participant-count dropdown and the "no limit" explainer. */
+.count-select-wrap{position:relative}
+.count-select{appearance:none;-webkit-appearance:none;padding-right:44px;cursor:pointer;color:#252535}
+.count-select:disabled{cursor:not-allowed}
+.count-select-icon{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:22px;color:#77778a;pointer-events:none}
+.count-select:disabled+.count-select-icon{opacity:.45}
+.open-explainer{grid-column:1/-1;margin:0;padding:12px 14px;border-radius:10px;background:var(--soft);color:#4a4a5c;font-size:13px;line-height:1.5}
+.open-explainer[hidden]{display:none}
+
+/* Larger segmented view tabs. */
+.calendar-page .view-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:0 0 22px;padding:4px;border:0;border-radius:16px;background:#f1f0f4}
+.calendar-page .view-tab{justify-content:center;gap:8px;min-height:50px;padding:0 14px;border-radius:12px;color:#5f5f70;font:600 15px 'DM Sans',sans-serif;transition:background-color .2s ease,color .2s ease,box-shadow .2s ease}
+.calendar-page .view-tab:after{display:none}
+@media(hover:hover){.calendar-page .view-tab:not(.active):hover{color:#252535;background:#ffffff80}}
+.calendar-page .view-tab.active{background:#fff;color:var(--brand-pink);font-weight:700;box-shadow:0 1px 2px #20203314,0 4px 12px #2020330d}
+.calendar-page .view-tab:focus-visible{outline:2px solid var(--brand-pink);outline-offset:2px}
+.calendar-page .view-tab .material-symbols-rounded{font-size:21px;line-height:1;font-variation-settings:'FILL' 0}
+.calendar-page .view-tab.active .material-symbols-rounded{font-variation-settings:'FILL' 1}
+.calendar-page .view-tab .tab-count,.calendar-page #commonTab .tab-count{min-width:22px;height:22px;border-radius:11px;background:#e2e1e8;color:#55556a;font-size:12px}
+.calendar-page .view-tab.active .tab-count,.calendar-page #commonTab.active .tab-count{background:var(--brand-pink);color:#fff}
+.calendar-page .view-tab .tab-count[hidden]{display:none}
+@media(max-width:640px){.calendar-page .view-tabs{margin-bottom:18px}.calendar-page .view-tab{min-height:46px;font-size:14px;gap:6px;padding:0 8px}.calendar-page .view-tab .material-symbols-rounded{font-size:19px}}
+@media(max-width:370px){.calendar-page .view-tab{font-size:13px;gap:4px}.calendar-page .view-tab .material-symbols-rounded{display:none}}
+
+/* Common days: empty state, open-calendar ranking. */
+.calendar-page .common-empty .empty-icon{display:grid;place-items:center;width:44px;height:44px;margin-bottom:10px;border-radius:50%;font-size:24px}
+.calendar-page .common-people{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0}
+.calendar-page .common-count{color:#4a4a5c;font:700 13px 'DM Sans',sans-serif;white-space:nowrap}
+.calendar-page .common-more{margin-left:4px;color:#77778a;font:700 11px 'DM Sans',sans-serif}
+.calendar-page .common-day.ranked .common-date{height:auto;padding:5px 0}
+.calendar-page .common-date small{display:block;color:#77778a;font:600 10px/1.2 'DM Sans',sans-serif;text-transform:lowercase}
+@media(max-width:640px){.calendar-page .common-people{gap:6px}.calendar-page .common-count{font-size:12px}}
+
+/* Preferred dot: always present, toggled with a compositor-only transition (smooth on phones). */
+.calendar-page .common-avatar-wrap::after{content:'';position:absolute;top:-11px;left:50%;width:7px;height:7px;border:1.5px solid #fff;border-radius:50%;background:#6546e8;z-index:-1;pointer-events:none;opacity:0;transform:translate3d(-50%,9px,0) scale(.5);transition:transform 280ms cubic-bezier(.2,.8,.3,1.25),opacity 160ms ease;will-change:transform,opacity}
+.calendar-page .common-avatar-wrap.preferred::after{opacity:1;transform:translate3d(-50%,0,0) scale(1)}
+@media(prefers-reduced-motion:reduce){.calendar-page .common-avatar-wrap::after{transition:none}}
+
+/* Full calendar: no new names, only "who are you?". */
+.calendar-page .name-field[hidden]{display:none}
+.calendar-page.calendar-full .participant-limit-message{color:#4a4a5c}
+.calendar-page .view-tab>span:not(.tab-count):not(.material-symbols-rounded){white-space:nowrap}
+@media(max-width:430px){.calendar-page .view-tab .material-symbols-rounded{display:none}}
+.calendar-page .common-avatars .common-avatar-wrap:first-child{margin-left:0}
+.calendar-page .common-people .common-count{margin-right:2px}

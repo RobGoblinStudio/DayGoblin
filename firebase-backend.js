@@ -1,43 +1,63 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js';
 import { getAuth,signInAnonymously } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js';
-import { getDatabase,ref,get,runTransaction,onValue } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js';
+import { getDatabase,ref,get,update,runTransaction,onValue } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js';
 let auth,db;
-const flushingQueues=new Set();
+let connected=false;
+const connectionListeners=new Set();
+const latestRooms=new Map();
+const flushedSlugs=new Set();
 export let participantId;
 export let api;
-const withTimeout=(promise,ms=6000)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Anslutningen dröjde.')),ms))]);
+// How long a write may wait for the server before we tell the user it is only saved on this device.
+const SLOW_WRITE_MS=4000;
+const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const withTimeout=(promise,ms=6000)=>Promise.race([promise,wait(ms).then(()=>{throw new Error('Anslutningen dröjde.')})]);
 function cacheKey(slug){return `daybuddy:${slug}:room-cache`}
 function queueKey(slug){return `daybuddy:${slug}:pending-writes`}
 function readCache(slug){try{return JSON.parse(localStorage.getItem(cacheKey(slug))||'null')}catch{return null}}
 function readQueue(slug){try{return JSON.parse(localStorage.getItem(queueKey(slug))||'[]')}catch{return []}}
-function writeQueue(slug,queue){localStorage.setItem(queueKey(slug),JSON.stringify(queue))}
+function writeQueue(slug,queue){try{if(queue.length)localStorage.setItem(queueKey(slug),JSON.stringify(queue));else localStorage.removeItem(queueKey(slug))}catch{}}
+function removeQueued(slug,opId){writeQueue(slug,readQueue(slug).filter(item=>item.id!==opId))}
+function cacheRoom(slug,room){latestRooms.set(slug,room);try{localStorage.setItem(cacheKey(slug),JSON.stringify(room))}catch{}return room}
+// Only used for the offline fallback view: overlay this device's unsent changes on the cached room.
 function applyQueue(slug,room){
   if(!room)return room;
-  const queue=readQueue(slug);if(!queue.length)return room;
-  for(const op of queue){
-    let person=room.participants.find(item=>item.id===(op.participantId||participantId));
-    if(!person){person={id:op.participantId||participantId,name:'',colorIndex:room.participants.length,dates:[],preferredDates:[],createdAt:new Date().toISOString()};room.participants.push(person)}
-    person.name=op.name;if(op.date){const dates=new Set(person.dates);if(op.available)dates.add(op.date);else dates.delete(op.date);person.dates=[...dates].sort();if(!op.available)person.preferredDates=(person.preferredDates||[]).filter(date=>date!==op.date)}if(op.preferenceDate){const dates=new Set(person.preferredDates||[]);if(op.preferred)dates.add(op.preferenceDate);else dates.delete(op.preferenceDate);person.preferredDates=[...dates].sort()}
+  for(const op of readQueue(slug)){
+    let person=room.participants.find(item=>item.id===op.participantId);
+    if(!person){person={id:op.participantId,name:'',colorIndex:room.participants.length,dates:[],preferredDates:[],createdAt:new Date().toISOString()};room.participants.push(person)}
+    person.name=op.name;
+    if(op.date){const dates=new Set(person.dates);if(op.available)dates.add(op.date);else dates.delete(op.date);person.dates=[...dates].sort();if(!op.available)person.preferredDates=(person.preferredDates||[]).filter(date=>date!==op.date)}
+    if(op.preferenceDate){const dates=new Set(person.preferredDates||[]);if(op.preferred)dates.add(op.preferenceDate);else dates.delete(op.preferenceDate);person.preferredDates=[...dates].sort()}
   }
   return room;
 }
-function cacheRoom(slug,room){const merged=applyQueue(slug,room);try{localStorage.setItem(cacheKey(slug),JSON.stringify(merged))}catch{}return merged}
-function saveOfflineOperation(slug,operation){operation.id=crypto.randomUUID();const queue=readQueue(slug);queue.push(operation);writeQueue(slug,queue);const room=readCache(slug);if(room)cacheRoom(slug,room)}
 class OfflineQueuedError extends Error{constructor(){super('Sparad på den här enheten. Synkas när anslutningen är tillbaka.');this.name='OfflineQueuedError';this.offlineQueued=true}}
+class CalendarFullError extends Error{constructor(){super('Kalendern är full. Välj ett befintligt namn.');this.name='CalendarFullError';this.calendarFull=true}}
+
 export async function initialize(config){
   const app=initializeApp(config);
   auth=getAuth(app);db=getDatabase(app);
   await signInAnonymously(auth);
   participantId=auth.currentUser.uid;
+  onValue(ref(db,'.info/connected'),snapshot=>{connected=snapshot.val()===true;for(const listener of connectionListeners)listener(connected)});
   api={
     async createCalendar(title,count){return createCalendar(title,count)},
-    async getCalendar(slug){try{const result=await withTimeout(get(ref(db,`calendars/${slug}`)));if(!result.exists())throw new Error('Kalendern hittades inte.');const room=cacheRoom(slug,normalize(slug,result.val()));if(readQueue(slug).length)window.setTimeout(()=>flushQueue(slug),0);return room}catch(error){const cached=readCache(slug);if(cached){window.setTimeout(()=>flushQueue(slug),0);return applyQueue(slug,cached)}throw error}},
-    async saveParticipant(slug,id,name){return savePerson(slug,id,name,null,false)},
-    async saveVote(slug,id,name,date,available){return savePerson(slug,id,name,date,available)},
-    async savePreference(slug,id,name,date,preferred){return savePersonPreference(slug,id,name,date,preferred)},
-    subscribe(slug,onUpdate,onError){return onValue(ref(db,`calendars/${slug}`),snapshot=>{if(snapshot.exists())onUpdate(cacheRoom(slug,normalize(slug,snapshot.val())));else onError()},onError)}
+    async getCalendar(slug){
+      try{
+        const result=await withTimeout(get(ref(db,`calendars/${slug}`)));
+        if(!result.exists())throw new Error('Kalendern hittades inte.');
+        const room=cacheRoom(slug,normalize(slug,result.val()));
+        flushQueue(slug);
+        return room;
+      }catch(error){const cached=readCache(slug);if(cached)return applyQueue(slug,cached);throw error}
+    },
+    async saveParticipant(slug,id,name){return write(slug,{participantId:id,name:name.trim()})},
+    async saveVote(slug,id,name,date,available){return write(slug,{participantId:id,name:name.trim(),date,available})},
+    async savePreference(slug,id,name,date,preferred){return write(slug,{participantId:id,name:name.trim(),preferenceDate:date,preferred})},
+    // Firebase applies this device's writes locally right away, so every snapshot already includes them.
+    subscribe(slug,onUpdate,onError){return onValue(ref(db,`calendars/${slug}`),snapshot=>{if(snapshot.exists())onUpdate(cacheRoom(slug,normalize(slug,snapshot.val())));else onError()},onError)},
+    onConnectionChange(listener){connectionListeners.add(listener);listener(connected);return ()=>connectionListeners.delete(listener)}
   };
-  window.addEventListener('online',()=>{for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key?.startsWith('daybuddy:')&&key.endsWith(':pending-writes'))flushQueue(key.slice(9,-15))}});
 }
 
 function normalize(slug,value){
@@ -59,49 +79,39 @@ async function createCalendar(title,count){
   if(result.snapshot.child('ownerUid').val()!==participantId)throw new Error('Kalenderlänken krockade. Försök igen.');
   return {slug:roomSlug};
 }
-function participantRef(slug,id){return ref(db,`calendars/${slug}/participants/${id}`)}
-async function savePerson(slug,id,name,date,available){
-  const pRef=participantRef(slug,id);
-  const op={participantId:id,name:name.trim(),date,available};saveOfflineOperation(slug,op);
-  try{
-    const cached=readCache(slug);const colorIndex=cached?.participants.find(person=>person.id===id)?.colorIndex??cached?.participants.length??0;
-    const result=await withTimeout(runTransaction(pRef,current=>{const person=current||{id,colorIndex,createdAt:new Date().toISOString(),dates:{}};person.name=op.name;person.dates=person.dates||{};if(date){if(available)person.dates[date]=true;else{delete person.dates[date];if(person.preferredDates)delete person.preferredDates[date]}}return person}));
-    if(!result.committed)throw new Error('Ändringen kunde inte sparas.');
-    const queue=readQueue(slug);const index=queue.findIndex(item=>item.id===op.id);if(index>=0){queue.splice(index,1);writeQueue(slug,queue)}
-    return {ok:true};
-  }catch(error){
-    if(error.code&&!/network|unavailable|disconnected/i.test(error.code)){
-      const queue=readQueue(slug).filter(item=>item.id!==op.id);writeQueue(slug,queue);throw error;
-    }
-    throw new OfflineQueuedError();
+// One small multi-path update per change: no transaction round trips, and Firebase shows it locally at once.
+function payloadFor(slug,op){
+  const room=latestRooms.get(slug)||readCache(slug);
+  const existing=room?.participants.find(person=>person.id===op.participantId);
+  const payload={id:op.participantId,name:op.name};
+  if(!existing){
+    if(room?.participantCount&&room.participants.length>=room.participantCount)throw new CalendarFullError();
+    payload.colorIndex=room?.participants.length??0;
+    payload.createdAt=new Date().toISOString();
   }
+  if(op.date){payload[`dates/${op.date}`]=op.available?true:null;if(!op.available)payload[`preferredDates/${op.date}`]=null}
+  if(op.preferenceDate)payload[`preferredDates/${op.preferenceDate}`]=op.preferred?true:null;
+  return payload;
 }
-async function savePersonPreference(slug,id,name,date,preferred){
-  const pRef=participantRef(slug,id);
-  const op={participantId:id,name:name.trim(),preferenceDate:date,preferred};saveOfflineOperation(slug,op);
-  try{
-    const cached=readCache(slug);const colorIndex=cached?.participants.find(person=>person.id===id)?.colorIndex??cached?.participants.length??0;
-    const result=await withTimeout(runTransaction(pRef,current=>{const person=current||{id,colorIndex,createdAt:new Date().toISOString(),dates:{},preferredDates:{}};person.name=op.name;person.preferredDates=person.preferredDates||{};if(preferred)person.preferredDates[date]=true;else delete person.preferredDates[date];return person}));
-    if(!result.committed)throw new Error('Ändringen kunde inte sparas.');
-    const queue=readQueue(slug);const index=queue.findIndex(item=>item.id===op.id);if(index>=0){queue.splice(index,1);writeQueue(slug,queue)}
-    return {ok:true};
-  }catch(error){
-    if(error.code&&!/network|unavailable|disconnected/i.test(error.code)){const queue=readQueue(slug).filter(item=>item.id!==op.id);writeQueue(slug,queue);throw error}
-    throw new OfflineQueuedError();
-  }
+async function write(slug,op){
+  const payload=payloadFor(slug,op);
+  op.id=crypto.randomUUID();
+  const queue=readQueue(slug);queue.push(op);writeQueue(slug,queue);
+  const saved=update(ref(db,`calendars/${slug}/participants/${op.participantId}`),payload);
+  saved.then(()=>removeQueued(slug,op.id),()=>removeQueued(slug,op.id));
+  const savedOutcome=saved.then(()=>'saved');savedOutcome.catch(()=>{});
+  const outcome=await Promise.race([savedOutcome,wait(SLOW_WRITE_MS).then(()=>'slow')]);
+  // Still waiting: Firebase keeps the write and sends it as soon as it can.
+  // Only say "offline" when Firebase itself reports that the connection is down.
+  if(outcome==='slow'&&!connected)throw new OfflineQueuedError();
+  return {ok:true};
 }
+// Resend changes a previous visit could not deliver (for example if the tab was closed while offline).
 async function flushQueue(slug){
-  if(flushingQueues.has(slug))return;
-  flushingQueues.add(slug);
-  try{
-    for(const op of readQueue(slug)){
-      const id=op.participantId||participantId;
-      const cached=readCache(slug);const colorIndex=cached?.participants.find(person=>person.id===id)?.colorIndex??cached?.participants.length??0;
-      try{
-        const result=await withTimeout(runTransaction(participantRef(slug,id),current=>{const person=current||{id,colorIndex,createdAt:new Date().toISOString(),dates:{},preferredDates:{}};person.name=op.name;person.dates=person.dates||{};person.preferredDates=person.preferredDates||{};if(op.date){if(op.available)person.dates[op.date]=true;else{delete person.dates[op.date];delete person.preferredDates[op.date]}}if(op.preferenceDate){if(op.preferred)person.preferredDates[op.preferenceDate]=true;else delete person.preferredDates[op.preferenceDate]}return person}));
-        if(!result.committed)return;
-        const queue=readQueue(slug);const index=queue.findIndex(item=>item.id===op.id);if(index>=0){queue.splice(index,1);writeQueue(slug,queue)}
-      }catch{return}
-    }
-  }finally{flushingQueues.delete(slug)}
+  if(flushedSlugs.has(slug))return;
+  flushedSlugs.add(slug);
+  for(const op of readQueue(slug)){
+    try{await update(ref(db,`calendars/${slug}/participants/${op.participantId}`),payloadFor(slug,op))}catch{}
+    removeQueued(slug,op.id);
+  }
 }

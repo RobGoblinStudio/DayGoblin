@@ -8,6 +8,17 @@
     },
     {
       "source": "/:room([a-z0-9]+-[a-z0-9]+-[a-z0-9]+)",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|TelegramBot|LinkedInBot|Slackbot|Discordbot|Pinterest|SkypeUriPreview|Snapchat|redditbot|Embedly|Applebot).*"
+        }
+      ],
+      "destination": "/api/calendar-meta?slug=:room"
+    },
+    {
+      "source": "/:room([a-z0-9]+-[a-z0-9]+-[a-z0-9]+)",
       "destination": "/calendar.html"
     }
   ],

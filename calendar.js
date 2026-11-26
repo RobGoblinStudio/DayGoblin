@@ -1,5 +1,5 @@
-import { api, participantId, ready, startupError } from './data.js?v=25';
-import { currentLanguage, locale, t } from './i18n.js?v=6';
+import { api, participantId, ready, startupError } from './data.js?v=26';
+import { currentLanguage, locale, t } from './i18n.js?v=7';
 
 const roomSlug=decodeURIComponent(location.pathname.split('/').filter(Boolean)[0]||'');
 const nameKey=`daybuddy:${roomSlug}:name`;
@@ -17,8 +17,7 @@ const pendingVotes=new Set();
 const pendingVoteStates=new Map();
 const pendingPreferences=new Set();
 const pendingPreferenceStates=new Map();
-const enteringPreferenceDots=new Set();
-const leavingPreferenceDots=new Set();
+let commonListSignature='';
 let renderedAvatarKeys=new Set();
 let renderedAvatarPeople=new Map();
 let renderedAvatarStackOrders=new Map();
@@ -106,6 +105,11 @@ function commonDays(availability){
   if(room?.participantCount==null)return [];
   return [...availability.entries()].filter(([key,people])=>{const date=fromKey(key);return date>=today&&date<visibleDateEnd()&&people.length>=room.participantCount}).map(([key,people])=>({key,date:fromKey(key),people})).sort((a,b)=>a.key.localeCompare(b.key));
 }
+// Open calendars: the days most people can make, best first.
+function popularDays(availability){
+  return [...availability.entries()].filter(([key,people])=>{const date=fromKey(key);return people.length&&date>=today&&date<visibleDateEnd()}).map(([key,people])=>({key,date:fromKey(key),people})).sort((a,b)=>b.people.length-a.people.length||a.key.localeCompare(b.key)).slice(0,10);
+}
+function isLockedOut(){return room?.participantCount!=null&&participants().length>=room.participantCount&&!currentParticipant()}
 function render(){
   if(!room)return;
   updatePersonColors();
@@ -118,9 +122,13 @@ function render(){
   picker.hidden=!participants().length;
   profileInput.placeholder=t(participants().length?'newParticipantName':'name');
   profileInput.setAttribute('aria-label',t(participants().length?'newParticipantName':'name'));
+  const locked=isLockedOut();
+  document.body.classList.toggle('calendar-full',locked);
+  profileInput.closest('.name-field').hidden=locked;
+  document.querySelector('.participant-picker-label').textContent=t(locked?'calendarFullPicker':'continueAs');
   options.innerHTML=participants().map(person=>`<button class="participant-option${person.id===activeParticipantId?' selected':''}" type="button" data-participant-id="${escapeHtml(person.id)}" aria-pressed="${person.id===activeParticipantId}"><i class="person-avatar" style="--person-color:${personColor(person)}">${escapeHtml(person.name.trim().charAt(0).toUpperCase())}</i><span>${escapeHtml(person.name)}</span></button>`).join('');
-  const atCapacity=!openAudience&&participants().length>=room.participantCount;
-  document.getElementById('participantLimitMessage').hidden=!(atCapacity&&!currentParticipant());
+  const limitMessage=document.getElementById('participantLimitMessage');
+  limitMessage.hidden=!locked;limitMessage.textContent=t('calendarFull',{count:room.participantCount});
   document.title=`${room.title} — DayGoblin`;
   updateShareMetadata(room.title);
   document.getElementById('calendarTitle').textContent=room.title;
@@ -143,13 +151,11 @@ function render(){
   }
   for(const [key,removal] of pendingAvatarRemovals)if(removal.until<=renderTime)pendingAvatarRemovals.delete(key);
   let maxVotes=0;for(const people of availability.values())maxVotes=Math.max(maxVotes,people.length);
-  const days=commonDays(availability);
-  const commonTab=document.getElementById('commonTab');
-  commonTab.hidden=openAudience;
-  commonTab.disabled=!openAudience&&days.length===0;
-  commonTab.setAttribute('aria-disabled',String(commonTab.disabled));
-  if(activeView==='common'&&(commonTab.hidden||commonTab.disabled))activeView='calendar';
-  document.getElementById('commonCount').textContent=days.length;
+  const days=openAudience?popularDays(availability):commonDays(availability);
+  document.getElementById('commonTabLabel').textContent=t(openAudience?'popularTab':'commonTab');
+  document.getElementById('commonDaysHeading').textContent=t(openAudience?'popularHeading':'commonDaysHeading');
+  const commonCount=document.getElementById('commonCount');
+  commonCount.textContent=days.length;commonCount.hidden=openAudience;
 
   const monthContainer=document.getElementById('months');
   const previousAvatarRects=new Map([...monthContainer.querySelectorAll('.day .initials i[data-avatar-key]')].map(avatar=>[avatar.dataset.avatarKey,avatar.getBoundingClientRect()]));
@@ -228,34 +234,7 @@ function render(){
     });
     monthContainerForAnimation.dataset.avatarAnimationListener='true';
   }
-  if(!days.length){
-    commonContainer.innerHTML=`<div class="common-empty"><span class="empty-icon">✳</span><strong>${escapeHtml(t('noCommon'))}</strong><p>${escapeHtml(t('noCommonHint'))}</p></div>`;
-  }else{
-    const months=new Map();
-    for(const day of days){
-      const monthName=new Intl.DateTimeFormat(locale(),{month:'long',year:'numeric'}).format(day.date);
-      if(!months.has(monthName))months.set(monthName,[]);
-      months.get(monthName).push(day);
-    }
-    commonContainer.innerHTML=[...months].map(([monthName,monthDays])=>`
-      <section class="common-month">
-        <h3 class="common-month-title">${escapeHtml(monthName)}</h3>
-        ${monthDays.map(({key,date,people})=>{
-          const weekday=new Intl.DateTimeFormat(locale(),{weekday:'short'}).format(date).replace('.','');
-          const preferredPeople=people.filter(person=>(person.preferredDates||[]).includes(key));
-          const avatars=people.map(person=>{
-            const preferred=(person.preferredDates||[]).includes(key);
-            const label=preferred?`${person.name} — ${t('preferredDay')}`:person.name;
-            const markerKey=`${key}:${person.id}`;
-            const markerClass=preferred?(enteringPreferenceDots.has(markerKey)?' preferred preference-entering':' preferred'):(leavingPreferenceDots.has(markerKey)?' preference-removing':'');
-            return `<span class="common-avatar-wrap${markerClass}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"><i class="common-avatar" style="--person-color:${personColor(person)}">${escapeHtml(person.name.trim().charAt(0).toUpperCase())}</i></span>`;
-          }).join('');
-          const mine=preferredPeople.some(person=>person.id===activeParticipantId);
-          const pending=pendingPreferences.has(key);
-          return `<article class="common-day"><div class="common-date"><span>${escapeHtml(weekday)}</span><strong>${date.getDate()}</strong></div><span class="common-avatars" aria-hidden="true">${avatars}</span><button class="preference-button${mine?' active':''}" type="button" data-prefer-date="${key}" aria-pressed="${mine}"${pending?' disabled':''}><span class="material-symbols-rounded" aria-hidden="true">${mine?'check':''}</span><span>${escapeHtml(t(mine?'preferredDay':'preferDay'))}</span></button></article>`;
-        }).join('')}
-      </section>`).join('');
-  }
+  renderCommonDays(commonContainer,days,openAudience);
   setActiveView(activeView);
 
   renderedAvatarKeys=nextAvatarKeys;
@@ -265,6 +244,45 @@ function render(){
   hasRenderedOnce=true;
 }
 
+function preferenceLabel(person,key){return (person.preferredDates||[]).includes(key)?`${person.name} — ${t('preferredDay')}`:person.name}
+function renderCommonDays(container,days,openAudience){
+  const signature=JSON.stringify([currentLanguage(),openAudience,activeParticipantId,days.map(({key,people})=>[key,people.map(person=>[person.id,person.name,personColor(person)])])]);
+  // Same days and people as last time: only patch preference state, so the dot animation is never interrupted.
+  if(signature===commonListSignature){
+    for(const {key,people} of days){
+      const article=container.querySelector(`[data-common-date="${key}"]`);if(!article)continue;
+      for(const person of people){
+        const wrap=article.querySelector(`[data-person-id="${CSS.escape(person.id)}"]`);if(!wrap)continue;
+        wrap.classList.toggle('preferred',(person.preferredDates||[]).includes(key));
+        wrap.title=preferenceLabel(person,key);
+      }
+      const mine=people.some(person=>person.id===activeParticipantId&&(person.preferredDates||[]).includes(key));
+      const button=article.querySelector('[data-prefer-date]');
+      button.classList.toggle('active',mine);button.setAttribute('aria-pressed',String(mine));button.disabled=pendingPreferences.has(key);
+      button.querySelector('.material-symbols-rounded').textContent=mine?'check':'';
+      button.querySelector('span:last-child').textContent=t(mine?'preferredDay':'preferDay');
+    }
+    return;
+  }
+  commonListSignature=signature;
+  if(!days.length){
+    container.innerHTML=`<div class="common-empty"><span class="empty-icon material-symbols-rounded" aria-hidden="true">${openAudience?'how_to_vote':'event_available'}</span><strong>${escapeHtml(t(openAudience?'noVotes':'noCommon'))}</strong><p>${escapeHtml(t(openAudience?'noVotesHint':'noCommonHint'))}</p></div>`;
+    return;
+  }
+  const dayRow=({key,date,people})=>{
+    const weekday=new Intl.DateTimeFormat(locale(),{weekday:'short'}).format(date).replace('.','');
+    const month=new Intl.DateTimeFormat(locale(),{month:'short'}).format(date).replace('.','');
+    const shown=people.slice(0,openAudience?6:10);
+    const avatars=shown.map(person=>`<span class="common-avatar-wrap${(person.preferredDates||[]).includes(key)?' preferred':''}" data-person-id="${escapeHtml(person.id)}" title="${escapeHtml(preferenceLabel(person,key))}"><i class="common-avatar" style="--person-color:${personColor(person)}">${escapeHtml(person.name.trim().charAt(0).toUpperCase())}</i></span>`).join('')+(people.length>shown.length?`<span class="common-more">+${people.length-shown.length}</span>`:'');
+    const mine=people.some(person=>person.id===activeParticipantId&&(person.preferredDates||[]).includes(key));
+    const count=openAudience?`<span class="common-count">${escapeHtml(t('peopleCan',{count:people.length}))}</span>`:'';
+    return `<article class="common-day${openAudience?' ranked':''}" data-common-date="${key}"><div class="common-date"><span>${escapeHtml(weekday)}</span><strong>${date.getDate()}</strong>${openAudience?`<small>${escapeHtml(month)}</small>`:''}</div><span class="common-people">${count}<span class="common-avatars" aria-hidden="true">${avatars}</span></span><button class="preference-button${mine?' active':''}" type="button" data-prefer-date="${key}" aria-pressed="${mine}"${pendingPreferences.has(key)?' disabled':''}><span class="material-symbols-rounded" aria-hidden="true">${mine?'check':''}</span><span>${escapeHtml(t(mine?'preferredDay':'preferDay'))}</span></button></article>`;
+  };
+  if(openAudience){container.innerHTML=`<section class="common-month">${days.map(dayRow).join('')}</section>`;return}
+  const months=new Map();
+  for(const day of days){const monthName=new Intl.DateTimeFormat(locale(),{month:'long',year:'numeric'}).format(day.date);if(!months.has(monthName))months.set(monthName,[]);months.get(monthName).push(day)}
+  container.innerHTML=[...months].map(([monthName,monthDays])=>`<section class="common-month"><h3 class="common-month-title">${escapeHtml(monthName)}</h3>${monthDays.map(dayRow).join('')}</section>`).join('');
+}
 function updateShareMetadata(title){
   const description=`${title} — planera tillsammans med DayGoblin.`;
   const set=(selector,value)=>{const element=document.querySelector(selector);if(element)element.setAttribute('content',value)};
@@ -272,7 +290,7 @@ function updateShareMetadata(title){
   set('meta[property="og:title"]',`${title} — DayGoblin`);
   set('meta[property="og:description"]',description);
   set('meta[property="og:url"]',`${location.origin}${location.pathname}`);
-  set('meta[property="og:image"]',`${location.origin}/share-card.svg`);
+  set('meta[property="og:image"]',`${location.origin}/share-card.png`);
   set('meta[name="twitter:title"]',`${title} — DayGoblin`);
   set('meta[name="twitter:description"]',description);
 }
@@ -293,10 +311,10 @@ async function saveName(name){
 }
 async function toggleDate(key){
   if(pendingVotes.has(key))return;
+  if(isLockedOut()){toast(t('calendarFullToast'));document.getElementById('participantPicker').scrollIntoView({behavior:'smooth',block:'center'});return}
   const name=profileInput.value.trim();if(!name){focusNameInput();toast(t('nameFirst'));return}
   clearTimeout(nameTimer);
   const existing=currentParticipant();
-  if(!existing&&room.participantCount!=null&&participants().length>=room.participantCount){toast(t('calendarFull'));return}
   const previousState=existing?{name:existing.name,dates:[...existing.dates]}:null;
   const available=!(existing?.dates||[]).includes(key);
   const voteState={name,available,saved:false};
@@ -317,6 +335,7 @@ async function toggleDate(key){
     applyParticipantVote(room,key,voteState);
     if(pendingVoteStates.get(key)===voteState){voteState.saved=true;if(serverHasVote(latestServerRoom,key,voteState))pendingVoteStates.delete(key)}
   }catch(error){
+    if(error.calendarFull){pendingVoteStates.delete(key);pendingAvatarRemovals.delete(avatarRemovalKey);room.participants=room.participants.filter(person=>person.id!==activeParticipantId);toast(t('calendarFullToast'));return}
     if(error.offlineQueued){applyParticipantVote(room,key,voteState);if(pendingVoteStates.get(key)===voteState){voteState.saved=true;if(serverHasVote(latestServerRoom,key,voteState))pendingVoteStates.delete(key)}toast(t('offlineSaved'));return}
     const failureMessage=error instanceof TypeError||/fetch|network/i.test(error.message)
       ?t('saveError')
@@ -344,10 +363,6 @@ async function togglePreferredDay(key){
   const name=profileInput.value.trim();if(!name){focusNameInput();toast(t('nameFirst'));return}
   clearTimeout(nameTimer);
   const state={participantId:activeParticipantId,name,preferred:!(person.preferredDates||[]).includes(key),saved:false};
-  const markerKey=`${key}:${activeParticipantId}`;
-  enteringPreferenceDots.delete(markerKey);leavingPreferenceDots.delete(markerKey);
-  const markerSet=state.preferred?enteringPreferenceDots:leavingPreferenceDots;markerSet.add(markerKey);
-  setTimeout(()=>{markerSet.delete(markerKey);render()},state.preferred?320:180);
   pendingPreferences.add(key);pendingPreferenceStates.set(key,state);applyParticipantPreference(room,key,state);render();
   try{
     await api.savePreference(roomSlug,activeParticipantId,name,key,state.preferred);
@@ -375,8 +390,8 @@ function connectLive(){
     const changed=roomSignature(room)!==roomSignature(nextRoom);
     room=nextRoom;
     if(changed)render();
-    document.body.classList.remove('connection-paused');
-  },()=>document.body.classList.add('connection-paused'));
+  },()=>{});
+  api.onConnectionChange?.(online=>document.body.classList.toggle('connection-paused',!online));
 }
 function focusNameInput(){
   try{profileInput.focus({preventScroll:true})}catch{profileInput.focus()}
