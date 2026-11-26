@@ -21,6 +21,7 @@ const localApi={
   async getCalendar(slug){return localJson(`/api/calendar/${encodeURIComponent(slug)}`)},
   async saveParticipant(slug,id,name){return localJson(`/api/calendar/${encodeURIComponent(slug)}/participants/${encodeURIComponent(id)}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})})},
   async saveVote(slug,id,name,date,available){return localJson(`/api/calendar/${encodeURIComponent(slug)}/participants/${encodeURIComponent(id)}/days/${date}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,available})})},
+  async saveVotes(slug,id,name,dates,available){return localJson(`/api/calendar/${encodeURIComponent(slug)}/participants/${encodeURIComponent(id)}/days`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,dates,available})})},
   async savePreference(slug,id,name,date,preferred){return localJson(`/api/calendar/${encodeURIComponent(slug)}/participants/${encodeURIComponent(id)}/preferences/${date}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,preferred})})},
   subscribe(slug,onUpdate,onError){const source=new EventSource(`/api/calendar/${encodeURIComponent(slug)}/events`);source.addEventListener('update',event=>{onUpdate(JSON.parse(event.data));notifyLocalConnection(true)});source.onopen=()=>notifyLocalConnection(true);source.onerror=()=>{notifyLocalConnection(false);onError?.()};return ()=>source.close()},
   onConnectionChange(listener){localConnectionListeners.add(listener);return ()=>localConnectionListeners.delete(listener)}
@@ -34,7 +35,7 @@ export let startupError=null;
 const useFirebase=configured&&!['localhost','127.0.0.1'].includes(location.hostname);
 if(useFirebase){
   try{
-    backend=await import('./firebase-backend.js?v=26');
+    backend=await import('./firebase-backend.js?v=27');
     ready=backend.initialize(firebaseConfig);
     await ready;
     participantId=backend.participantId;

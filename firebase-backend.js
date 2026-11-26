@@ -26,7 +26,7 @@ function applyQueue(slug,room){
     let person=room.participants.find(item=>item.id===op.participantId);
     if(!person){person={id:op.participantId,name:'',colorIndex:room.participants.length,dates:[],preferredDates:[],createdAt:new Date().toISOString()};room.participants.push(person)}
     person.name=op.name;
-    if(op.date){const dates=new Set(person.dates);if(op.available)dates.add(op.date);else dates.delete(op.date);person.dates=[...dates].sort();if(!op.available)person.preferredDates=(person.preferredDates||[]).filter(date=>date!==op.date)}
+    for(const day of op.dates||(op.date?[op.date]:[])){const dates=new Set(person.dates);if(op.available)dates.add(day);else dates.delete(day);person.dates=[...dates].sort();if(!op.available)person.preferredDates=(person.preferredDates||[]).filter(date=>date!==day)}
     if(op.preferenceDate){const dates=new Set(person.preferredDates||[]);if(op.preferred)dates.add(op.preferenceDate);else dates.delete(op.preferenceDate);person.preferredDates=[...dates].sort()}
   }
   return room;
@@ -53,6 +53,7 @@ export async function initialize(config){
     },
     async saveParticipant(slug,id,name){return write(slug,{participantId:id,name:name.trim()})},
     async saveVote(slug,id,name,date,available){return write(slug,{participantId:id,name:name.trim(),date,available})},
+    async saveVotes(slug,id,name,dates,available){return write(slug,{participantId:id,name:name.trim(),dates,available})},
     async savePreference(slug,id,name,date,preferred){return write(slug,{participantId:id,name:name.trim(),preferenceDate:date,preferred})},
     // Firebase applies this device's writes locally right away, so every snapshot already includes them.
     subscribe(slug,onUpdate,onError){return onValue(ref(db,`calendars/${slug}`),snapshot=>{if(snapshot.exists())onUpdate(cacheRoom(slug,normalize(slug,snapshot.val())));else onError()},onError)},
@@ -89,7 +90,7 @@ function payloadFor(slug,op){
     payload.colorIndex=room?.participants.length??0;
     payload.createdAt=new Date().toISOString();
   }
-  if(op.date){payload[`dates/${op.date}`]=op.available?true:null;if(!op.available)payload[`preferredDates/${op.date}`]=null}
+  for(const day of op.dates||(op.date?[op.date]:[])){payload[`dates/${day}`]=op.available?true:null;if(!op.available)payload[`preferredDates/${day}`]=null}
   if(op.preferenceDate)payload[`preferredDates/${op.preferenceDate}`]=op.preferred?true:null;
   return payload;
 }

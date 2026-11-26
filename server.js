@@ -106,6 +106,21 @@ const server=http.createServer(async(req,res)=>{
       participant.dates=[...dates].sort();await persist();sendCalendar(room);return json(res,200,{ok:true});
     }
 
+    const batchMatch=url.pathname.match(/^\/api\/calendar\/([a-z]+-[a-z]+-[a-z]+)\/participants\/([a-zA-Z0-9_-]{8,80})\/days$/);
+    if(req.method==='PUT'&&batchMatch){
+      const [,room,participantId]=batchMatch;const calendar=database.calendars[room];if(!calendar)return json(res,404,{error:'Kalendern hittades inte.'});
+      const body=await readBody(req);const name=String(body.name||'').trim();if(!name||name.length>32)return json(res,400,{error:'Skriv ett namn på högst 32 tecken.'});
+      if(!Array.isArray(body.dates)||!body.dates.length||body.dates.length>120||!body.dates.every(validDate))return json(res,400,{error:'Ogiltiga datum.'});
+      if(typeof body.available!=='boolean')return json(res,400,{error:'Ange om du kan eller inte kan dagarna.'});
+      if(!calendar.participants[participantId]&&calendar.participantCount!=null&&Object.keys(calendar.participants).length>=calendar.participantCount)return json(res,409,{error:'Kalendern är full. Välj ett befintligt namn.'});
+      const participant=calendar.participants[participantId]||{id:participantId,name,dates:[],preferredDates:[],colorIndex:Object.keys(calendar.participants).length,createdAt:new Date().toISOString()};
+      participant.name=name;calendar.participants[participantId]=participant;
+      const dates=new Set(participant.dates),preferredDates=new Set(participant.preferredDates||[]);
+      for(const date of body.dates){if(body.available)dates.add(date);else{dates.delete(date);preferredDates.delete(date)}}
+      participant.dates=[...dates].sort();participant.preferredDates=[...preferredDates].sort();
+      await persist();sendCalendar(room);return json(res,200,{ok:true});
+    }
+
     const preferenceMatch=url.pathname.match(/^\/api\/calendar\/([a-z]+-[a-z]+-[a-z]+)\/participants\/([a-zA-Z0-9_-]{8,80})\/preferences\/(\d{4}-\d{2}-\d{2})$/);
     if(req.method==='PUT'&&preferenceMatch){
       const [,room,participantId,date]=preferenceMatch;const calendar=database.calendars[room];if(!calendar)return json(res,404,{error:'Kalendern hittades inte.'});

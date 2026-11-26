@@ -274,7 +274,7 @@ h1,h2,.month-title,.responders-heading strong,.create-label,.open-copy b,.brand,
 .calendar-page .day.complete:hover{background:#84df7d}
 .calendar-page .day.complete .number{color:#173d24}
 .calendar-page .day.today{border-color:#e31c5f!important;background:#fff0f3}
-.calendar-page .day.complete.today{background:#91e789;border-color:#202033!important}
+.calendar-page .day.complete.today{background:#91e789;border-color:#e31c5f!important}
 .calendar-page .day.complete .initials i{border-color:#fff}
 .calendar-page .day.mine .initials i:first-child{background:#e31c5f}
 .calendar-page .calendar.open-voting .day.heat-1{background:#fff0f3;border-color:#f4d2db}
@@ -283,7 +283,7 @@ h1,h2,.month-title,.responders-heading strong,.create-label,.open-copy b,.brand,
 .calendar-page .calendar.open-voting .day.heat-4{background:#f889a8;border-color:#e87294}
 .calendar-page .calendar.open-voting .day.heat-5{background:#e31c5f;border-color:#e31c5f;color:#fff}
 .calendar-page .calendar.open-voting .day.heat-5 .number,.calendar-page .heat-5 .vote-count{color:#fff}
-.calendar-page .today.heat-5{border-color:#202033!important}
+.calendar-page .today.heat-5{border-color:#a3124a!important}
 .open-option input:checked~.switch{background:#e31c5f}
 .purpose-input:focus,.count-input:focus{border-color:#ff385c;box-shadow:0 0 0 3px #ff385c20}
 .responders{border-color:var(--line)}
@@ -333,9 +333,9 @@ h1,h2,.month-title,.responders-heading strong,.create-label,.open-copy b,.brand,
 .calendar-page.open-audience .controls{justify-content:flex-start}
 .calendar-page.open-audience .name-field{width:min(100%,360px)}
 .calendar-page.open-audience .calendar-intro .intro-copy{max-width:420px}
-@keyframes avatar-bounce-in{0%{opacity:0;transform:scale(.76) translateY(2px)}68%{opacity:1;transform:scale(1.08) translateY(-1px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes avatar-bounce-in{0%{opacity:0;transform:translate3d(0,9px,0)}55%{opacity:1}70%{transform:translate3d(0,-1.5px,0)}100%{opacity:1;transform:translate3d(0,0,0)}}
 @keyframes avatar-bounce-out{0%{opacity:1;transform:scale(1) translateY(0)}30%{opacity:1;transform:scale(1.045) translateY(-1px)}100%{opacity:0;transform:scale(.78) translateY(2px)}}
-.calendar-page .avatar-pop{animation:avatar-bounce-in 380ms cubic-bezier(.2,.75,.28,1.14) both;animation-delay:calc(var(--stack-order,0)*18ms);transform-origin:center}
+.calendar-page .avatar-pop{animation:avatar-bounce-in 420ms cubic-bezier(.22,.8,.3,1) both;animation-delay:var(--pop-delay,0ms)}
 .calendar-page .avatar-pop-out{animation:avatar-bounce-out 290ms cubic-bezier(.3,0,.5,1) var(--exit-delay,0ms) both;transform-origin:center;pointer-events:none}
 @media(prefers-reduced-motion:reduce){.calendar-page .avatar-pop,.calendar-page .avatar-pop-out{animation:none}}
 .app-footer small{margin-left:9px;color:#a5a5b1;font:500 10px 'DM Sans',sans-serif;letter-spacing:.25px}
@@ -599,3 +599,12 @@ a,button,label,input,select,textarea,[role="button"]{-webkit-tap-highlight-color
 @media(max-width:430px){.calendar-page .view-tab .material-symbols-rounded{display:none}}
 .calendar-page .common-avatars .common-avatar-wrap:first-child{margin-left:0}
 .calendar-page .common-people .common-count{margin-right:2px}
+
+/* Drag to select a range of days. */
+.calendar-page .drag-hint{display:flex;align-items:center;gap:8px;margin:0 0 14px;color:#77778a;font-size:12px;line-height:1.4}
+.calendar-page .drag-hint .material-symbols-rounded{font-size:18px;color:var(--brand-pink)}
+.calendar-page .calendar .day[data-date]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.calendar-page.drag-selecting,.calendar-page.drag-selecting *{cursor:grabbing!important;user-select:none}
+.calendar-page .calendar .day.drag-range{background:#ffe3ea!important;border-color:var(--brand-pink)!important;box-shadow:0 0 0 1px var(--brand-pink);transform:scale(.97);transition:transform .12s ease,background-color .12s ease}
+.calendar-page.drag-removing .calendar .day.drag-range{background:#f1f0f4!important;border-color:#9a9aab!important;border-style:dashed!important;box-shadow:none}
+@media(prefers-reduced-motion:reduce){.calendar-page .calendar .day.drag-range{transform:none}}

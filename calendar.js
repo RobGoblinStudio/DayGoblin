@@ -1,5 +1,5 @@
-import { api, participantId, ready, startupError } from './data.js?v=26';
-import { currentLanguage, locale, t } from './i18n.js?v=7';
+import { api, participantId, ready, startupError } from './data.js?v=27';
+import { currentLanguage, locale, t } from './i18n.js?v=8';
 
 const roomSlug=decodeURIComponent(location.pathname.split('/').filter(Boolean)[0]||'');
 const nameKey=`daybuddy:${roomSlug}:name`;
@@ -27,19 +27,28 @@ let latestServerRoom=null;
 let hasRenderedOnce=false;
 const pendingAvatarRemovals=new Map();
 
-function animateAvatar(_key,wasRendered){return hasRenderedOnce&&!wasRendered}
+// New avatars rise straight up. A re-render mid-animation continues the same animation instead of restarting it.
+const AVATAR_POP_MS=420;
+const avatarPopStarts=new Map();
+function avatarPopElapsed(key,wasRendered,now){
+  if(hasRenderedOnce&&!wasRendered){avatarPopStarts.set(key,now);return 0}
+  const started=avatarPopStarts.get(key);if(started==null)return null;
+  const elapsed=now-started;if(elapsed>=AVATAR_POP_MS){avatarPopStarts.delete(key);return null}
+  return elapsed;
+}
+// Layout position inside the day cell, unaffected by running transforms (getBoundingClientRect is not).
+function avatarLayoutPosition(avatar){return {left:avatar.offsetLeft,top:avatar.offsetTop}}
 function animateAvatarReflow(container,previousRects){
   if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
   for(const avatar of container.querySelectorAll('.day .initials i[data-avatar-key]:not(.removal-ghost):not(.avatar-pop)')){
     const previous=previousRects.get(avatar.dataset.avatarKey);if(!previous)continue;
-    const current=avatar.getBoundingClientRect(),dx=previous.left-current.left,dy=previous.top-current.top;
+    const current=avatarLayoutPosition(avatar),dx=previous.left-current.left,dy=previous.top-current.top;
     if(Math.abs(dx)<1&&Math.abs(dy)<1)continue;
     avatar.animate([{transform:`translate3d(${dx}px,${dy}px,0)`},{transform:'translate3d(0,0,0)'}],{duration:370,easing:'cubic-bezier(.22,.72,.24,1)'});
   }
   for(const ghost of container.querySelectorAll('.removal-ghost[data-avatar-key]')){
     const previous=previousRects.get(ghost.dataset.avatarKey);if(!previous)continue;
-    const parent=ghost.parentElement.getBoundingClientRect();
-    ghost.style.left=`${previous.left-parent.left}px`;ghost.style.top=`${previous.top-parent.top}px`;
+    ghost.style.left=`${previous.left}px`;ghost.style.top=`${previous.top}px`;
   }
 }
 
@@ -158,7 +167,7 @@ function render(){
   commonCount.textContent=days.length;commonCount.hidden=openAudience;
 
   const monthContainer=document.getElementById('months');
-  const previousAvatarRects=new Map([...monthContainer.querySelectorAll('.day .initials i[data-avatar-key]')].map(avatar=>[avatar.dataset.avatarKey,avatar.getBoundingClientRect()]));
+  const previousAvatarRects=new Map([...monthContainer.querySelectorAll('.day .initials i[data-avatar-key]')].map(avatar=>[avatar.dataset.avatarKey,avatarLayoutPosition(avatar)]));
   monthContainer.replaceChildren();
   for(let offset=0;offset<3;offset++){
     const visibleMonth=new Date(firstMonth.getFullYear(),firstMonth.getMonth()+offset,1);
@@ -191,9 +200,9 @@ function render(){
         const avatarKey=`${key}:${person.id}`;nextAvatarKeys.add(avatarKey);
         nextAvatarPeople.set(avatarKey,person);
         nextAvatarStackOrders.set(avatarKey,index);
-        const entered=animateAvatar(`day:${avatarKey}`,renderedAvatarKeys.has(avatarKey));
-        const classes=entered?'avatar-pop':'';
-        return `<i${classes?` class="${classes}"`:''} data-avatar-key="${avatarKey}" title="${escapeHtml(person.name)}" style="--person-color:${personColor(person)};--stack-order:${index}">${escapeHtml(person.name.trim().charAt(0).toUpperCase())}</i>`;
+        const popElapsed=reduceMotion?null:avatarPopElapsed(avatarKey,renderedAvatarKeys.has(avatarKey),renderTime);
+        const popping=popElapsed!=null;
+        return `<i${popping?' class="avatar-pop"':''} data-avatar-key="${avatarKey}" title="${escapeHtml(person.name)}" style="--person-color:${personColor(person)};--stack-order:${index}${popping?`;--pop-delay:-${popElapsed}ms`:''}">${escapeHtml(person.name.trim().charAt(0).toUpperCase())}</i>`;
         }).join('');
         const exitMarkers=ghosts.map(({key:avatarKey,person,stackOrder,elapsed})=>`<i class="avatar-pop-out removal-ghost" data-avatar-key="${avatarKey}" aria-hidden="true" style="--person-color:${personColor(person)};--stack-order:${stackOrder};--exit-delay:-${elapsed}ms">${escapeHtml(person.name.trim().charAt(0).toUpperCase())}</i>`).join('');
         markers=`<span class="initials count-${Math.min(people.length,10)}">${visibleMarkers}${exitMarkers}</span>`;
@@ -218,6 +227,7 @@ function render(){
   }
   renderedDayStyles=nextDayStyles;
   animateAvatarReflow(monthContainer,previousAvatarRects);
+  if(drag.active)paintDragRange();
 
   const commonContainer=document.getElementById('commonDays');
   const monthContainerForAnimation=document.getElementById('months');
@@ -357,6 +367,94 @@ async function toggleDate(key){
   }
   finally{pendingVotes.delete(key);render()}
 }
+// Mark several days at once (drag selection). One request, optimistic like a single click.
+async function setDays(keys,available){
+  const name=profileInput.value.trim();
+  const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const existing=currentParticipant();
+  const states=new Map();
+  clearTimeout(nameTimer);
+  for(const key of keys){
+    const state={name,available,saved:false};states.set(key,state);pendingVoteStates.set(key,state);pendingVotes.add(key);
+    const removalKey=`${key}:${activeParticipantId}`;
+    if(!available&&existing&&!reduceMotion){const startedAt=Date.now();pendingAvatarRemovals.set(removalKey,{person:existing,startedAt,until:startedAt+290})}else pendingAvatarRemovals.delete(removalKey);
+    applyParticipantVote(room,key,state);
+  }
+  rememberName(name);
+  try{localStorage.setItem(participantKey,activeParticipantId)}catch{}
+  render();
+  const markSaved=()=>{for(const [key,state] of states){applyParticipantVote(room,key,state);if(pendingVoteStates.get(key)===state){state.saved=true;if(serverHasVote(latestServerRoom,key,state))pendingVoteStates.delete(key)}}};
+  try{await api.saveVotes(roomSlug,activeParticipantId,name,keys,available);markSaved()}
+  catch(error){
+    if(error.offlineQueued){markSaved();toast(t('offlineSaved'));return}
+    for(const [key,state] of states){if(pendingVoteStates.get(key)===state)pendingVoteStates.delete(key);pendingAvatarRemovals.delete(`${key}:${activeParticipantId}`)}
+    try{room=applyPendingPreferences(applyPendingVotes(await api.getCalendar(roomSlug)))}catch{}
+    toast(t(error.calendarFull?'calendarFullToast':error instanceof TypeError||/fetch|network/i.test(error.message)?'saveError':'saveErrorShort'));
+  }finally{for(const key of keys)pendingVotes.delete(key);render()}
+}
+
+// Drag across days to mark a whole range. Mouse: press and drag. Touch: hold briefly, then drag (a quick swipe still scrolls).
+const LONG_PRESS_MS=320;
+const drag={pointerId:null,pointerType:'',startKey:null,currentKey:null,startX:0,startY:0,timer:null,active:false,available:true,suppressClick:false};
+function dayKeyAt(x,y){const day=document.elementFromPoint(x,y)?.closest?.('.day[data-date]');return day&&!day.disabled?day.dataset.date:null}
+function dragRangeKeys(){
+  if(!drag.startKey||!drag.currentKey)return [];
+  const [from,to]=[drag.startKey,drag.currentKey].sort();
+  const keys=[];for(let date=fromKey(from);dateKey(date)<=to;date.setDate(date.getDate()+1)){const key=dateKey(date);if(date>=today&&date<visibleDateEnd())keys.push(key)}
+  return keys;
+}
+function paintDragRange(){
+  const range=new Set(dragRangeKeys());
+  document.body.classList.toggle('drag-selecting',drag.active);
+  document.body.classList.toggle('drag-removing',drag.active&&!drag.available);
+  for(const day of document.querySelectorAll('#months .day[data-date]'))day.classList.toggle('drag-range',drag.active&&range.has(day.dataset.date));
+}
+function resetDrag(){clearTimeout(drag.timer);Object.assign(drag,{pointerId:null,startKey:null,currentKey:null,timer:null,active:false});paintDragRange()}
+function startDrag(){
+  // Same checks as a single click, before anything lights up.
+  if(isLockedOut()){toast(t('calendarFullToast'));resetDrag();return}
+  if(!profileInput.value.trim()){focusNameInput();toast(t('nameFirst'));resetDrag();drag.suppressClick=true;return}
+  drag.active=true;drag.currentKey=drag.startKey;
+  drag.available=!(currentParticipant()?.dates||[]).includes(drag.startKey);
+  if(drag.pointerType!=='mouse')navigator.vibrate?.(8);
+  paintDragRange();
+}
+function finishDrag(){
+  const keys=dragRangeKeys(),available=drag.available;
+  const mine=new Set(currentParticipant()?.dates||[]);
+  const changed=keys.filter(key=>mine.has(key)!==available&&!pendingVotes.has(key));
+  drag.suppressClick=true;resetDrag();
+  if(changed.length)setDays(changed,available);
+}
+const monthsElement=document.getElementById('months');
+monthsElement.addEventListener('pointerdown',event=>{
+  if(event.pointerType==='mouse'&&event.button!==0)return;
+  const key=event.target.closest?.('.day[data-date]:not(:disabled)')?.dataset.date;if(!key||!room)return;
+  resetDrag();drag.suppressClick=false;
+  Object.assign(drag,{pointerId:event.pointerId,pointerType:event.pointerType,startKey:key,startX:event.clientX,startY:event.clientY});
+  if(event.pointerType!=='mouse')drag.timer=setTimeout(startDrag,LONG_PRESS_MS);
+});
+window.addEventListener('pointermove',event=>{
+  if(event.pointerId!==drag.pointerId)return;
+  if(!drag.active){
+    const moved=Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY);
+    if(drag.pointerType!=='mouse'){if(moved>10)resetDrag();return}// finger moved before the hold: it's a scroll
+    if(moved<6)return;
+    const key=dayKeyAt(event.clientX,event.clientY);if(!key||key===drag.startKey)return;
+    startDrag();if(!drag.active)return;
+  }
+  const key=dayKeyAt(event.clientX,event.clientY);
+  if(key&&key!==drag.currentKey){drag.currentKey=key;paintDragRange();if(drag.pointerType!=='mouse')navigator.vibrate?.(4)}
+});
+window.addEventListener('pointerup',event=>{if(event.pointerId!==drag.pointerId)return;if(drag.active)finishDrag();else resetDrag()});
+window.addEventListener('pointercancel',event=>{if(event.pointerId===drag.pointerId)resetDrag()});
+// While dragging on a touch screen the page must not scroll.
+monthsElement.addEventListener('touchmove',event=>{if(drag.active||drag.timer)event.cancelable&&drag.active&&event.preventDefault()},{passive:false});
+monthsElement.addEventListener('contextmenu',event=>{if(drag.active||drag.timer)event.preventDefault()});
+// The click that ends a drag must not also toggle the last day.
+monthsElement.addEventListener('click',event=>{if(drag.suppressClick){drag.suppressClick=false;event.stopPropagation();event.preventDefault()}},true);
+monthsElement.addEventListener('dragstart',event=>event.preventDefault());
+
 async function togglePreferredDay(key){
   if(pendingPreferences.has(key))return;
   const person=currentParticipant();if(!person){toast(t('chooseParticipant'));return}
