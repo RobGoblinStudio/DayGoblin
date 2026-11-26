@@ -32,6 +32,13 @@ DAYGOBLIN_ALLOW_EMPTY_CONFIG=1 npm run build   # bygg utan Firebase-config
 
 Det finns inga automatiska tester. Verifiera ändringar genom att köra `npm start` och testa i webbläsaren.
 
+## Arbetsflöde: lokalt först, publicera på begäran
+
+- Allt arbete görs och testas lokalt (`npm start`, eller förhandsvisningen `daygoblin` i `.claude/launch.json`). På localhost används alltid den lokala servern och `data/`, aldrig Firebase-produktionsdatabasen.
+- Committa gärna lokalt på `main`, men **pusha aldrig till GitHub förrän användaren uttryckligen ber om att publicera**. En push till `main` driftsätter sajten på Vercel (`daygoblin.robgoblin.studio`).
+- Vid publicering: visa vilka commits som går ut, kör `npm run build`, pusha `main`, och kontrollera sedan att produktionssajten svarar och visar ändringen.
+- Ändringar i `database.rules.json` publiceras separat i Firebase-konsolen. Påminn användaren om det.
+
 ## Driftsättning
 
 - Både `vercel.json` och `netlify.toml` finns. `netlify.toml` gör 301-redirect av allt till `https://daygoblin.robgoblin.studio`.
