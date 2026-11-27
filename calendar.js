@@ -1,5 +1,5 @@
-import { api, participantId, ready, startupError } from './data.js?v=27';
-import { currentLanguage, locale, t } from './i18n.js?v=15';
+import { api, participantId, ready, startupError } from './data.js?v=28';
+import { currentLanguage, locale, t } from './i18n.js?v=16';
 
 const roomSlug=decodeURIComponent(location.pathname.split('/').filter(Boolean)[0]||'');
 const nameKey=`daybuddy:${roomSlug}:name`;

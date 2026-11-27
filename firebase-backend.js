@@ -18,7 +18,9 @@ function readCache(slug){try{return JSON.parse(localStorage.getItem(cacheKey(slu
 function readQueue(slug){try{return JSON.parse(localStorage.getItem(queueKey(slug))||'[]')}catch{return []}}
 function writeQueue(slug,queue){try{if(queue.length)localStorage.setItem(queueKey(slug),JSON.stringify(queue));else localStorage.removeItem(queueKey(slug))}catch{}}
 function removeQueued(slug,opId){writeQueue(slug,readQueue(slug).filter(item=>item.id!==opId))}
-function cacheRoom(slug,room){latestRooms.set(slug,room);try{localStorage.setItem(cacheKey(slug),JSON.stringify(room))}catch{}return room}
+// The page changes the room it gets (to show clicks before the server answers), so it always gets its own copy.
+// latestRooms must stay exactly what the server said: payloadFor() uses it to decide if a participant is new.
+function cacheRoom(slug,room){latestRooms.set(slug,room);try{localStorage.setItem(cacheKey(slug),JSON.stringify(room))}catch{}return structuredClone(room)}
 // Only used for the offline fallback view: overlay this device's unsent changes on the cached room.
 function applyQueue(slug,room){
   if(!room)return room;

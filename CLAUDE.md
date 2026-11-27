@@ -34,7 +34,8 @@ Det finns inga automatiska tester. Verifiera ändringar genom att köra `npm sta
 
 ## Arbetsflöde: lokalt först, publicera på begäran
 
-- Allt arbete görs och testas lokalt (`npm start`, eller förhandsvisningen `daygoblin` i `.claude/launch.json`). På localhost används alltid den lokala servern och `data/`, aldrig Firebase-produktionsdatabasen.
+- Allt arbete görs och testas lokalt (`npm start`, eller förhandsvisningen `daygoblin` i `.claude/launch.json`). På localhost används den lokala servern och `data/`, inte Firebase-produktionsdatabasen.
+- Den lokala servern sparar annorlunda än Firebase (server-side logik i stället för Firebase-regler). Ändringar i sparlogiken (`firebase-backend.js`, `data.js`, sparanrop i `calendar.js`) ska därför också provas mot riktiga Firebase innan publicering: öppna en kalender lokalt med `?backend=firebase` (skriver i produktionsdatabasen, använd en testkalender).
 - Committa gärna lokalt på `main`, men **pusha aldrig till GitHub förrän användaren uttryckligen ber om att publicera**. En push till `main` driftsätter sajten på Vercel (`daygoblin.robgoblin.studio`).
 - Vid publicering: visa vilka commits som går ut, höj versionsnumret, kör `npm run build`, pusha `main`, och kontrollera sedan att produktionssajten svarar och visar ändringen.
 - Versionsnumret står i sidfoten (`vX.Y.Z` i `index.html`, `create.html`, `calendar.html`) och i `package.json`, håll dem lika. Nya funktioner höjer mittensiffran (1.0.10 → 1.1.0), enbart rättningar den sista (1.1.0 → 1.1.1).

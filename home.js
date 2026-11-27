@@ -1,5 +1,5 @@
 import { api, startupError } from './data.js';
-import { currentLanguage, t } from './i18n.js?v=15';
+import { currentLanguage, t } from './i18n.js?v=16';
 
 const form=document.getElementById('createForm');
 const countInput=document.getElementById('participantCountInput');

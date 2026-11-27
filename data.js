@@ -32,10 +32,12 @@ export let ready=Promise.resolve();
 export let participantId=localParticipantId();
 export let api=localApi;
 export let startupError=null;
-const useFirebase=configured&&!['localhost','127.0.0.1'].includes(location.hostname);
+// Locally the app uses the local server; add ?backend=firebase to test against the real Firebase database.
+const forceFirebase=new URLSearchParams(location.search).get('backend')==='firebase';
+const useFirebase=configured&&(forceFirebase||!['localhost','127.0.0.1'].includes(location.hostname));
 if(useFirebase){
   try{
-    backend=await import('./firebase-backend.js?v=27');
+    backend=await import('./firebase-backend.js?v=28');
     ready=backend.initialize(firebaseConfig);
     await ready;
     participantId=backend.participantId;

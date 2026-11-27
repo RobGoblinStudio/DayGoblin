@@ -706,3 +706,8 @@ a,button,label,input,select,textarea,[role="button"]{-webkit-tap-highlight-color
 .calendar-choice-mark{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;color:#fff;font:700 14px 'DM Sans',sans-serif;flex:0 0 28px}
 .calendar-choice-mark.google{background:#1a73e8}.calendar-choice-mark.outlook{background:#0f6cbd}
 .calendar-choice-mark.apple{background:#252535;font-family:'Material Symbols Rounded';font-weight:400;font-size:18px}
+.name-dialog .name-dialog-input{text-align:left}
+.name-dialog .name-dialog-error{align-self:flex-start}
+.name-dialog-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%}
+.name-dialog .identity-sheet{align-items:stretch}
+.name-dialog .identity-sheet>.name-dialog-icon{align-self:center}
