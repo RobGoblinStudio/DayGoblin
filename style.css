@@ -711,3 +711,14 @@ a,button,label,input,select,textarea,[role="button"]{-webkit-tap-highlight-color
 .name-dialog-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%}
 .name-dialog .identity-sheet{align-items:stretch}
 .name-dialog .identity-sheet>.name-dialog-icon{align-self:center}
+
+/* Never scroll sideways: nothing may make the page wider than the screen.
+   (clip, unlike hidden, keeps the sticky tabs working.) */
+html,body{overflow-x:clip;max-width:100%}
+.calendar-page .view-tabs.is-stuck::before{left:0;right:0}
+/* No automatic zooming on phones: keep text size on rotation, and no double-tap zoom when tapping days quickly.
+   Pinch-to-zoom still works for anyone who wants it. Text fields stay at 16px so iOS never zooms on focus. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation}
+input,select,textarea{font-size:max(16px,1em)}
+.calendar-page .view-tabs.is-stuck::before{left:-12px;right:-12px}
+@media(min-width:641px){.calendar-page .view-tabs.is-stuck::before{left:-24px;right:-24px}}
