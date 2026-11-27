@@ -1,5 +1,5 @@
 import { api, participantId, ready, startupError } from './data.js?v=27';
-import { currentLanguage, locale, t } from './i18n.js?v=8';
+import { currentLanguage, locale, t } from './i18n.js?v=15';
 
 const roomSlug=decodeURIComponent(location.pathname.split('/').filter(Boolean)[0]||'');
 const nameKey=`daybuddy:${roomSlug}:name`;
@@ -109,14 +109,29 @@ function availabilityByDate(){
   for(const person of participants())for(const date of person.dates){if(!result.has(date))result.set(date,[]);result.get(date).push(person)}
   return result;
 }
-function visibleDateEnd(){return new Date(firstMonth.getFullYear(),firstMonth.getMonth()+3,1)}
+const MONTH_STEP=3,MAX_MONTHS=12;
+let monthsShown=MONTH_STEP,newMonthsFrom=null;
+function visibleDateEnd(){return new Date(firstMonth.getFullYear(),firstMonth.getMonth()+monthsShown,1)}
+// Open far enough ahead that every marked day is visible (in steps of three months).
+function ensureMonthsCoverMarkedDays(){
+  let latest=null;for(const person of participants())for(const date of person.dates)if(!latest||date>latest)latest=date;
+  if(!latest)return;
+  const date=fromKey(latest),needed=(date.getFullYear()-firstMonth.getFullYear())*12+date.getMonth()-firstMonth.getMonth()+1;
+  while(monthsShown<needed&&monthsShown<MAX_MONTHS)monthsShown+=MONTH_STEP;
+}
 function commonDays(availability){
   if(room?.participantCount==null)return [];
-  return [...availability.entries()].filter(([key,people])=>{const date=fromKey(key);return date>=today&&date<visibleDateEnd()&&people.length>=room.participantCount}).map(([key,people])=>({key,date:fromKey(key),people})).sort((a,b)=>a.key.localeCompare(b.key));
+  return [...availability.entries()].filter(([key,people])=>{const date=fromKey(key);return date>=today&&people.length>=room.participantCount}).map(([key,people])=>({key,date:fromKey(key),people})).sort((a,b)=>a.key.localeCompare(b.key));
 }
 // Open calendars: the days most people can make, best first.
 function popularDays(availability){
-  return [...availability.entries()].filter(([key,people])=>{const date=fromKey(key);return people.length&&date>=today&&date<visibleDateEnd()}).map(([key,people])=>({key,date:fromKey(key),people})).sort((a,b)=>b.people.length-a.people.length||a.key.localeCompare(b.key)).slice(0,10);
+  return [...availability.entries()].filter(([key,people])=>{const date=fromKey(key);return people.length&&date>=today}).map(([key,people])=>({key,date:fromKey(key),people})).sort((a,b)=>b.people.length-a.people.length||a.key.localeCompare(b.key)).slice(0,10);
+}
+// Fixed groups of 3+: days when all but one (or two, in groups of 10) can make it.
+function nearlyCount(){const count=room?.participantCount;return count!=null&&count>=3?count-Math.max(1,Math.floor(count/5)):null}
+function nearDays(availability){
+  const threshold=nearlyCount();if(threshold==null)return [];
+  return [...availability.entries()].filter(([key,people])=>fromKey(key)>=today&&people.length>=threshold&&people.length<room.participantCount).map(([key,people])=>({key,date:fromKey(key),people})).sort((a,b)=>b.people.length-a.people.length||a.key.localeCompare(b.key)).slice(0,10);
 }
 function isLockedOut(){return room?.participantCount!=null&&participants().length>=room.participantCount&&!currentParticipant()}
 function render(){
@@ -134,7 +149,7 @@ function render(){
   const locked=isLockedOut();
   document.body.classList.toggle('calendar-full',locked);
   profileInput.closest('.name-field').hidden=locked;
-  document.querySelector('.participant-picker-label').textContent=t(locked?'calendarFullPicker':'continueAs');
+  document.querySelector('.participant-picker-label').textContent=t(locked?'calendarFullPicker':currentParticipant()?'continueAs':'orContinueAs');
   options.innerHTML=participants().map(person=>`<button class="participant-option${person.id===activeParticipantId?' selected':''}" type="button" data-participant-id="${escapeHtml(person.id)}" aria-pressed="${person.id===activeParticipantId}"><i class="person-avatar" style="--person-color:${personColor(person)}">${escapeHtml(person.name.trim().charAt(0).toUpperCase())}</i><span>${escapeHtml(person.name)}</span></button>`).join('');
   const limitMessage=document.getElementById('participantLimitMessage');
   limitMessage.hidden=!locked;limitMessage.textContent=t('calendarFull',{count:room.participantCount});
@@ -164,14 +179,18 @@ function render(){
   document.getElementById('commonTabLabel').textContent=t(openAudience?'popularTab':'commonTab');
   document.getElementById('commonDaysHeading').textContent=t(openAudience?'popularHeading':'commonDaysHeading');
   const commonCount=document.getElementById('commonCount');
+  const previousCount=Number(commonCount.textContent)||0;
   commonCount.textContent=days.length;commonCount.hidden=openAudience;
+  commonCount.classList.toggle('has-days',days.length>0);
+  // A small bump when a new common day appears, so it is noticed from the calendar view too.
+  if(hasRenderedOnce&&days.length>previousCount){commonCount.classList.remove('bump');void commonCount.offsetWidth;commonCount.classList.add('bump')}
 
   const monthContainer=document.getElementById('months');
   const previousAvatarRects=new Map([...monthContainer.querySelectorAll('.day .initials i[data-avatar-key]')].map(avatar=>[avatar.dataset.avatarKey,avatarLayoutPosition(avatar)]));
   monthContainer.replaceChildren();
-  for(let offset=0;offset<3;offset++){
+  for(let offset=0;offset<monthsShown;offset++){
     const visibleMonth=new Date(firstMonth.getFullYear(),firstMonth.getMonth()+offset,1);
-    const section=document.createElement('section');section.className='month-section';
+    const section=document.createElement('section');section.className=`month-section${newMonthsFrom!=null&&offset>=newMonthsFrom?' month-enter':''}`;
     const heading=document.createElement('h2');heading.className='month-title';heading.textContent=new Intl.DateTimeFormat(locale(),{month:'long',year:'numeric'}).format(visibleMonth);section.appendChild(heading);
     const weekdays=document.createElement('div');weekdays.className='weekdays';weekdays.setAttribute('aria-hidden','true');weekdays.innerHTML=currentLanguage()==='en'?'<span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>':'<span>M</span><span>T</span><span>O</span><span>T</span><span>F</span><span>L</span><span>S</span>';section.appendChild(weekdays);
     const grid=document.createElement('div');grid.className=`calendar${openAudience?' open-voting':''}`;
@@ -215,7 +234,7 @@ function render(){
         wash.addEventListener('animationend',()=>wash.remove(),{once:true});button.prepend(wash);
       }
       if(date>=today)button.addEventListener('click',()=>toggleDate(key));else button.disabled=true;
-      if(pendingVotes.has(key))button.classList.add('pending');grid.appendChild(button);
+      if(pendingVotes.has(key))button.classList.add('pending');if(awaitingName?.keys.includes(key))button.classList.add('awaiting-name');grid.appendChild(button);
     }
     section.appendChild(grid);monthContainer.appendChild(section);
   }
@@ -226,6 +245,8 @@ function render(){
     nextDayStyles.set(button.dataset.date,{state,backgroundColor:style.backgroundColor,borderColor:style.borderColor});
   }
   renderedDayStyles=nextDayStyles;
+  newMonthsFrom=null;
+  document.getElementById('moreMonths').hidden=monthsShown>=MAX_MONTHS;
   animateAvatarReflow(monthContainer,previousAvatarRects);
   if(drag.active)paintDragRange();
 
@@ -244,7 +265,7 @@ function render(){
     });
     monthContainerForAnimation.dataset.avatarAnimationListener='true';
   }
-  renderCommonDays(commonContainer,days,openAudience);
+  renderCommonDays(commonContainer,days,openAudience,openAudience?[]:nearDays(availability));
   setActiveView(activeView);
 
   renderedAvatarKeys=nextAvatarKeys;
@@ -255,11 +276,11 @@ function render(){
 }
 
 function preferenceLabel(person,key){return (person.preferredDates||[]).includes(key)?`${person.name} — ${t('preferredDay')}`:person.name}
-function renderCommonDays(container,days,openAudience){
-  const signature=JSON.stringify([currentLanguage(),openAudience,activeParticipantId,days.map(({key,people})=>[key,people.map(person=>[person.id,person.name,personColor(person)])])]);
+function renderCommonDays(container,days,openAudience,near=[]){
+  const signature=JSON.stringify([currentLanguage(),openAudience,activeParticipantId,[...days,{key:'near'},...near].map(({key,people=[]})=>[key,people.map(person=>[person.id,person.name,personColor(person)])])]);
   // Same days and people as last time: only patch preference state, so the dot animation is never interrupted.
   if(signature===commonListSignature){
-    for(const {key,people} of days){
+    for(const {key,people} of [...days,...near]){
       const article=container.querySelector(`[data-common-date="${key}"]`);if(!article)continue;
       for(const person of people){
         const wrap=article.querySelector(`[data-person-id="${CSS.escape(person.id)}"]`);if(!wrap)continue;
@@ -275,23 +296,28 @@ function renderCommonDays(container,days,openAudience){
     return;
   }
   commonListSignature=signature;
-  if(!days.length){
+  if(!days.length&&!near.length){
     container.innerHTML=`<div class="common-empty"><span class="empty-icon material-symbols-rounded" aria-hidden="true">${openAudience?'how_to_vote':'event_available'}</span><strong>${escapeHtml(t(openAudience?'noVotes':'noCommon'))}</strong><p>${escapeHtml(t(openAudience?'noVotesHint':'noCommonHint'))}</p></div>`;
     return;
   }
-  const dayRow=({key,date,people})=>{
+  const dayRow=({key,date,people},nearly=false)=>{
     const weekday=new Intl.DateTimeFormat(locale(),{weekday:'short'}).format(date).replace('.','');
     const month=new Intl.DateTimeFormat(locale(),{month:'short'}).format(date).replace('.','');
     const shown=people.slice(0,openAudience?6:10);
     const avatars=shown.map(person=>`<span class="common-avatar-wrap${(person.preferredDates||[]).includes(key)?' preferred':''}" data-person-id="${escapeHtml(person.id)}" title="${escapeHtml(preferenceLabel(person,key))}"><i class="common-avatar" style="--person-color:${personColor(person)}">${escapeHtml(person.name.trim().charAt(0).toUpperCase())}</i></span>`).join('')+(people.length>shown.length?`<span class="common-more">+${people.length-shown.length}</span>`:'');
     const mine=people.some(person=>person.id===activeParticipantId&&(person.preferredDates||[]).includes(key));
-    const count=openAudience?`<span class="common-count">${escapeHtml(t('peopleCan',{count:people.length}))}</span>`:'';
-    return `<article class="common-day${openAudience?' ranked':''}" data-common-date="${key}"><div class="common-date"><span>${escapeHtml(weekday)}</span><strong>${date.getDate()}</strong>${openAudience?`<small>${escapeHtml(month)}</small>`:''}</div><span class="common-people">${count}<span class="common-avatars" aria-hidden="true">${avatars}</span></span><button class="preference-button${mine?' active':''}" type="button" data-prefer-date="${key}" aria-pressed="${mine}"${pendingPreferences.has(key)?' disabled':''}><span class="material-symbols-rounded" aria-hidden="true">${mine?'check':''}</span><span>${escapeHtml(t(mine?'preferredDay':'preferDay'))}</span></button></article>`;
+    const countText=openAudience?t('peopleCan',{count:people.length}):nearly?t('countOf',{available:people.length,count:room.participantCount}):'';
+    const count=countText?`<span class="common-count">${escapeHtml(countText)}</span>`:'';
+    const withMonth=openAudience||nearly;
+    const addLabel=t('addToCalendar');
+    return `<article class="common-day${withMonth?' ranked':''}${nearly?' nearly':''}" data-common-date="${key}"><div class="common-date"><span>${escapeHtml(weekday)}</span><strong>${date.getDate()}</strong>${withMonth?`<small>${escapeHtml(month)}</small>`:''}</div><span class="common-people">${count}<span class="common-avatars" aria-hidden="true">${avatars}</span></span><button class="preference-button${mine?' active':''}" type="button" data-prefer-date="${key}" aria-pressed="${mine}"${pendingPreferences.has(key)?' disabled':''}><span class="material-symbols-rounded" aria-hidden="true">${mine?'check':''}</span><span>${escapeHtml(t(mine?'preferredDay':'preferDay'))}</span></button><button class="calendar-add-button" type="button" data-ics-date="${key}" title="${escapeHtml(addLabel)}" aria-label="${escapeHtml(addLabel)}"><span class="material-symbols-rounded" aria-hidden="true">calendar_add_on</span></button></article>`;
   };
-  if(openAudience){container.innerHTML=`<section class="common-month">${days.map(dayRow).join('')}</section>`;return}
+  const nearSection=near.length?`<section class="common-month common-near"><h3 class="common-near-title">${escapeHtml(t('nearlyAllHeading'))}</h3><p class="common-near-hint">${escapeHtml(t(days.length?'nearlyAllHint':'nearlyAllOnlyHint'))}</p>${near.map(day=>dayRow(day,true)).join('')}</section>`:'';
+  if(openAudience){container.innerHTML=`<section class="common-month">${days.map(day=>dayRow(day)).join('')}</section>`;return}
+  const fullEmpty=!days.length?`<div class="common-empty compact"><strong>${escapeHtml(t('noCommon'))}</strong></div>`:'';
   const months=new Map();
   for(const day of days){const monthName=new Intl.DateTimeFormat(locale(),{month:'long',year:'numeric'}).format(day.date);if(!months.has(monthName))months.set(monthName,[]);months.get(monthName).push(day)}
-  container.innerHTML=[...months].map(([monthName,monthDays])=>`<section class="common-month"><h3 class="common-month-title">${escapeHtml(monthName)}</h3>${monthDays.map(dayRow).join('')}</section>`).join('');
+  container.innerHTML=fullEmpty+[...months].map(([monthName,monthDays])=>`<section class="common-month"><h3 class="common-month-title">${escapeHtml(monthName)}</h3>${monthDays.map(day=>dayRow(day)).join('')}</section>`).join('')+nearSection;
 }
 function updateShareMetadata(title){
   const description=`${title} — planera tillsammans med DayGoblin.`;
@@ -322,7 +348,7 @@ async function saveName(name){
 async function toggleDate(key){
   if(pendingVotes.has(key))return;
   if(isLockedOut()){toast(t('calendarFullToast'));document.getElementById('participantPicker').scrollIntoView({behavior:'smooth',block:'center'});return}
-  const name=profileInput.value.trim();if(!name){focusNameInput();toast(t('nameFirst'));return}
+  const name=profileInput.value.trim();if(!name){askName({keys:[key],available:true});return}
   clearTimeout(nameTimer);
   const existing=currentParticipant();
   const previousState=existing?{name:existing.name,dates:[...existing.dates]}:null;
@@ -413,7 +439,6 @@ function resetDrag(){clearTimeout(drag.timer);Object.assign(drag,{pointerId:null
 function startDrag(){
   // Same checks as a single click, before anything lights up.
   if(isLockedOut()){toast(t('calendarFullToast'));resetDrag();return}
-  if(!profileInput.value.trim()){focusNameInput();toast(t('nameFirst'));resetDrag();drag.suppressClick=true;return}
   drag.active=true;drag.currentKey=drag.startKey;
   drag.available=!(currentParticipant()?.dates||[]).includes(drag.startKey);
   if(drag.pointerType!=='mouse')navigator.vibrate?.(8);
@@ -424,7 +449,9 @@ function finishDrag(){
   const mine=new Set(currentParticipant()?.dates||[]);
   const changed=keys.filter(key=>mine.has(key)!==available&&!pendingVotes.has(key));
   drag.suppressClick=true;resetDrag();
-  if(changed.length)setDays(changed,available);
+  if(!changed.length)return;
+  if(!profileInput.value.trim()){askName({keys:changed,available});return}
+  setDays(changed,available);
 }
 const monthsElement=document.getElementById('months');
 monthsElement.addEventListener('pointerdown',event=>{
@@ -513,16 +540,154 @@ profileInput.addEventListener('input',()=>{
   const name=profileInput.value;rememberName(name);clearTimeout(nameTimer);
   if(name.trim()&&currentParticipant())nameTimer=setTimeout(()=>saveName(name).catch(error=>toast(error.message)),700);
 });
-document.getElementById('participantOptions').addEventListener('click',event=>{
-  const option=event.target.closest('[data-participant-id]');if(!option)return;
-  const person=participants().find(item=>item.id===option.dataset.participantId);if(!person)return;
+function chooseParticipant(person){
   activeParticipantId=person.id;
   try{localStorage.setItem(participantKey,activeParticipantId)}catch{}
   profileInput.value=person.name;rememberName(person.name);clearTimeout(nameTimer);render();profileInput.blur();
+}
+// Tap first, name after: the tapped days wait (shown pink) while a sheet asks for a name, then they are saved.
+const nameDialog=document.getElementById('nameDialog');
+const nameDialogInput=document.getElementById('nameDialogInput');
+const nameDialogError=document.getElementById('nameDialogError');
+let awaitingName=null;
+function keepSheetAboveKeyboard(){
+  const viewport=window.visualViewport;if(!viewport||!nameDialog.open)return;
+  const hidden=Math.max(0,window.innerHeight-viewport.height-viewport.offsetTop);
+  nameDialog.style.marginBottom=window.matchMedia('(max-width:640px)').matches?`${hidden}px`:'';
+}
+window.visualViewport?.addEventListener('resize',keepSheetAboveKeyboard);
+window.visualViewport?.addEventListener('scroll',keepSheetAboveKeyboard);
+function askName(action){
+  awaitingName=action;render();
+  nameDialogInput.value='';nameDialogError.hidden=true;nameDialogInput.removeAttribute('aria-invalid');
+  document.getElementById('nameDialogTitle').textContent=t('nameSheetTitle');
+  document.getElementById('nameDialogBody').textContent=t('nameSheetBody');
+  nameDialogInput.placeholder=t('name');
+  document.getElementById('nameDialogDone').textContent=t('nameSheetDone');
+  document.getElementById('nameDialogCancel').textContent=t('nameSheetCancel');
+  const people=participants();
+  document.getElementById('nameDialogPeople').hidden=!people.length;
+  document.getElementById('nameDialogPeopleLabel').textContent=t('orContinueAs');
+  document.getElementById('nameDialogOptions').innerHTML=people.map(person=>`<button class="participant-option" type="button" data-sheet-participant="${escapeHtml(person.id)}"><i class="person-avatar" style="--person-color:${personColor(person)}">${escapeHtml(person.name.trim().charAt(0).toUpperCase())}</i><span>${escapeHtml(person.name)}</span></button>`).join('');
+  if(typeof nameDialog.showModal==='function')nameDialog.showModal();
+  keepSheetAboveKeyboard();
+  try{nameDialogInput.focus({preventScroll:true})}catch{nameDialogInput.focus()}
+}
+function closeNameSheet(){
+  nameDialog.classList.add('closing');
+  setTimeout(()=>{nameDialog.classList.remove('closing');nameDialog.style.marginBottom='';if(nameDialog.open)nameDialog.close()},180);
+}
+function runAwaitingAction(){
+  const action=awaitingName;awaitingName=null;if(!action){render();return}
+  const mine=new Set(currentParticipant()?.dates||[]);
+  if(action.keys.length===1){toggleDate(action.keys[0]);return}
+  const changed=action.keys.filter(key=>mine.has(key)!==action.available&&!pendingVotes.has(key));
+  if(changed.length)setDays(changed,action.available);else render();
+}
+document.getElementById('nameDialogForm').addEventListener('submit',event=>{
+  event.preventDefault();
+  const name=nameDialogInput.value.trim();
+  if(!name){nameDialogError.textContent=t('nameRequired');nameDialogError.hidden=false;nameDialogInput.setAttribute('aria-invalid','true');nameDialogInput.focus();return}
+  profileInput.value=name;rememberName(name);
+  closeNameSheet();runAwaitingAction();
 });
-document.getElementById('calendarTab').addEventListener('click',()=>setActiveView('calendar'));
-document.getElementById('commonTab').addEventListener('click',()=>setActiveView('common'));
-  document.getElementById('commonDays').addEventListener('click',event=>{const button=event.target.closest('[data-prefer-date]');if(button)togglePreferredDay(button.dataset.preferDate)});
+nameDialogInput.addEventListener('input',()=>{nameDialogError.hidden=true;nameDialogInput.removeAttribute('aria-invalid')});
+document.getElementById('nameDialogOptions').addEventListener('click',event=>{
+  const option=event.target.closest('[data-sheet-participant]');if(!option)return;
+  const person=participants().find(item=>item.id===option.dataset.sheetParticipant);if(!person)return;
+  closeNameSheet();chooseParticipant(person);runAwaitingAction();
+});
+function cancelNameSheet(){awaitingName=null;closeNameSheet();render()}
+document.getElementById('nameDialogCancel').addEventListener('click',cancelNameSheet);
+nameDialog.addEventListener('click',event=>{if(event.target===nameDialog)cancelNameSheet()});
+nameDialog.addEventListener('cancel',event=>{event.preventDefault();cancelNameSheet()});
+
+// Full calendar and this browser doesn't know who you are: confirm before taking over someone's name.
+const identityDialog=document.getElementById('identityDialog');
+let identityCandidate=null;
+function askIdentity(person){
+  identityCandidate=person;
+  const count=person.dates.filter(date=>fromKey(date)>=today).length;
+  const avatar=document.getElementById('identityAvatar');avatar.textContent=person.name.trim().charAt(0).toUpperCase();avatar.style.setProperty('--person-color',personColor(person));
+  document.getElementById('identityTitle').textContent=t('confirmIdentityTitle',{name:person.name});
+  document.getElementById('identityBody').textContent=t(count?(count===1?'confirmIdentityBodyOne':'confirmIdentityBody'):'confirmIdentityBodyNone',{name:person.name,count});
+  document.getElementById('identityYes').textContent=t('confirmIdentityYes',{name:person.name});
+  document.getElementById('identityNo').textContent=t('confirmIdentityNo');
+  if(typeof identityDialog.showModal==='function')identityDialog.showModal();else if(confirm(t('confirmIdentityTitle',{name:person.name})))chooseParticipant(person);
+}
+function closeIdentity(){identityDialog.classList.add('closing');setTimeout(()=>{identityDialog.classList.remove('closing');if(identityDialog.open)identityDialog.close()},180)}
+document.getElementById('identityYes').addEventListener('click',()=>{const person=identityCandidate;closeIdentity();if(person)chooseParticipant(person)});
+document.getElementById('identityNo').addEventListener('click',closeIdentity);
+identityDialog.addEventListener('click',event=>{if(event.target===identityDialog)closeIdentity()});
+identityDialog.addEventListener('cancel',event=>{event.preventDefault();closeIdentity()});
+document.getElementById('participantOptions').addEventListener('click',event=>{
+  const option=event.target.closest('[data-participant-id]');if(!option)return;
+  const person=participants().find(item=>item.id===option.dataset.participantId);if(!person)return;
+  if(isLockedOut())askIdentity(person);else chooseParticipant(person);
+});
+// Sticky tabs: a shadow while stuck, and switching view while stuck jumps to the top of the new view.
+const viewTabs=document.getElementById('viewTabs');
+const viewTabsSentinel=document.getElementById('viewTabsSentinel');
+function tabsAreStuck(){return viewTabsSentinel.getBoundingClientRect().bottom<0}
+if('IntersectionObserver' in window)new IntersectionObserver(([entry])=>viewTabs.classList.toggle('is-stuck',!entry.isIntersecting&&entry.boundingClientRect.top<0)).observe(viewTabsSentinel);
+function switchView(view){
+  const wasStuck=tabsAreStuck();
+  setActiveView(view);
+  if(wasStuck){const top=viewTabsSentinel.getBoundingClientRect().top+window.scrollY-8;window.scrollTo({top,behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})}
+}
+document.getElementById('calendarTab').addEventListener('click',()=>switchView('calendar'));
+document.getElementById('commonTab').addEventListener('click',()=>switchView('common'));
+document.getElementById('commonDays').addEventListener('click',event=>{
+  const prefer=event.target.closest('[data-prefer-date]');if(prefer){togglePreferredDay(prefer.dataset.preferDate);return}
+  const add=event.target.closest('[data-ics-date]');if(add)addDayToCalendar(add.dataset.icsDate);
+});
+// Add one all-day event to the person's own calendar, without handing them a file.
+// iPhone/iPad: a calendar link that iOS opens straight in Calendar. Android: the phone's default calendar app.
+// Computers: a small menu (Google, Outlook, and Apple on Mac), since browsers can't open the default calendar directly.
+const calendarDialog=document.getElementById('calendarDialog');
+let calendarDay=null;
+const isAppleMobile=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const isAndroid=/Android/i.test(navigator.userAgent);
+const isMac=/Macintosh|Mac OS X/.test(navigator.userAgent)&&!isAppleMobile;
+function eventDetails(key){
+  const start=fromKey(key),end=new Date(start);end.setDate(end.getDate()+1);
+  const url=`${location.origin}/${roomSlug}`;
+  return {title:room?.title||'DayGoblin',description:`${t('icsDescription')} ${url}`,startKey:key,endKey:dateKey(end),compactStart:key.replaceAll('-',''),compactEnd:dateKey(end).replaceAll('-','')};
+}
+function appleCalendarUrl(key){const e=eventDetails(key);return `${location.origin}/api/ics?${new URLSearchParams({slug:roomSlug,date:key,title:e.title,lang:currentLanguage()})}`}
+function googleCalendarUrl(key){const e=eventDetails(key);return `https://calendar.google.com/calendar/render?${new URLSearchParams({action:'TEMPLATE',text:e.title,dates:`${e.compactStart}/${e.compactEnd}`,details:e.description})}`}
+function outlookCalendarUrl(key){const e=eventDetails(key);return `https://outlook.live.com/calendar/0/deeplink/compose?${new URLSearchParams({path:'/calendar/action/compose',rru:'addevent',subject:e.title,startdt:e.startKey,enddt:e.endKey,allday:'true',body:e.description})}`}
+function androidCalendarUrl(key){
+  const e=eventDetails(key);const [y,m,d]=key.split('-').map(Number);
+  const begin=Date.UTC(y,m-1,d),finish=Date.UTC(y,m-1,d+1),enc=encodeURIComponent;
+  return `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=${enc(e.title)};S.description=${enc(e.description)};l.beginTime=${begin};l.endTime=${finish};B.allDay=true;S.browser_fallback_url=${enc(googleCalendarUrl(key))};end`;
+}
+function addDayToCalendar(key){
+  if(isAppleMobile){location.href=appleCalendarUrl(key);return}
+  if(isAndroid){location.href=androidCalendarUrl(key);return}
+  calendarDay=key;
+  document.getElementById('calendarDialogTitle').textContent=t('addToCalendarTitle');
+  document.getElementById('calendarDialogBody').textContent=new Intl.DateTimeFormat(locale(),{weekday:'long',day:'numeric',month:'long'}).format(fromKey(key));
+  document.getElementById('calendarDialogApple').hidden=!isMac;
+  document.getElementById('calendarDialogCancel').textContent=t('nameSheetCancel');
+  if(typeof calendarDialog.showModal==='function')calendarDialog.showModal();else window.open(googleCalendarUrl(key),'_blank','noopener');
+}
+function closeCalendarDialog(){calendarDialog.classList.add('closing');setTimeout(()=>{calendarDialog.classList.remove('closing');if(calendarDialog.open)calendarDialog.close()},180)}
+calendarDialog.addEventListener('click',event=>{
+  const choice=event.target.closest('[data-calendar]');
+  if(choice&&calendarDay){
+    const key=calendarDay,kind=choice.dataset.calendar;closeCalendarDialog();
+    if(kind==='apple')location.href=appleCalendarUrl(key);
+    else window.open(kind==='google'?googleCalendarUrl(key):outlookCalendarUrl(key),'_blank','noopener');
+    return;
+  }
+  if(event.target===calendarDialog||event.target.id==='calendarDialogCancel')closeCalendarDialog();
+});
+calendarDialog.addEventListener('cancel',event=>{event.preventDefault();closeCalendarDialog()});
+document.getElementById('moreMonths').addEventListener('click',()=>{
+  // The new months appear where the button was, so the page does not jump.
+  newMonthsFrom=monthsShown;monthsShown=Math.min(MAX_MONTHS,monthsShown+MONTH_STEP);render();
+});
 document.getElementById('shareButton').addEventListener('click',async()=>{
   const shareData={title:`${room?.title||'DayGoblin'} — DayGoblin`,url:location.href};
   try{if(navigator.share)await navigator.share(shareData);else{await navigator.clipboard.writeText(location.href);toast(t('copied'))}}
@@ -548,6 +713,7 @@ async function loadCalendar(){
       let rememberedId='';try{rememberedId=localStorage.getItem(participantKey)||''}catch{}
       if(!rememberedId)activeParticipantId=participantId;
       room=await api.getCalendar(roomSlug);
+      ensureMonthsCoverMarkedDays();
       if(rememberedId&&!room.participants.some(person=>person.id===rememberedId))activeParticipantId=participantId;
       render();connectLive();finishLoading();return;
     }catch(caught){
